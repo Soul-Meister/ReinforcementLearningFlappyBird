@@ -42,7 +42,7 @@ int main() {
 
             //show it bro
             SDL_RenderPresent(renderer);
-
+            cout << "test";
         }
     //ayo, clean it
     SDL_DestroyRenderer(renderer);
