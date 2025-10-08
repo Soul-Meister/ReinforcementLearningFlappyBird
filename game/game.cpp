@@ -1,13 +1,13 @@
-#include "game.h"
-#include "Bird.h"
+#include "./game.h"
+#include "../Bird/Bird.h"
 #include <SDL2/SDL.h>
 
 
-void update(SDL_Renderer *renderer, Bird bird, bool has_clicked) {
+void update(SDL_Renderer *renderer, Bird* pbird, bool has_clicked) {
     if (has_clicked) {
-        bird.update();
+        pbird->update();
     }
-    render(renderer, &bird);
+    render(renderer, pbird);
 }
 
 void render(SDL_Renderer *renderer, Bird* pbird) {

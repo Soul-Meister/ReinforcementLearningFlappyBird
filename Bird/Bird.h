@@ -8,12 +8,12 @@
 
 class Bird {
     public:
-        double gravity = 5;
-        double x = 390;
-        double y = 220;
-        double width = 20;
-        double height = 20;
-        double y_vel = 0;
+        double gravity;
+        double x;
+        double y;
+        double width;
+        double height;
+        double y_vel;
 
     Bird();
     void update();

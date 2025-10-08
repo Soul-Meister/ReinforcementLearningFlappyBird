@@ -3,13 +3,13 @@
 //
 #pragma once
 #include <SDL2/SDL.h>
-#include "Bird.h"
+#include "../Bird/Bird.h"
 
 
 #ifndef FLAPPYBIRD_GAME_H
 #define FLAPPYBIRD_GAME_H
 
-void update(SDL_Renderer*, Bird, bool);
+void update(SDL_Renderer*, Bird*, bool);
 void render(SDL_Renderer*, Bird*);
 
 #endif //FLAPPYBIRD_GAME_H

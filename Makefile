@@ -1,14 +1,15 @@
 CXX = g++
-CXXFLAGS = -Wall -Wextra -Wconversion -Wdouble-promotion -Wunreachable-code -Wshadow -Wpedantic -std=c++17 `sdl2-config --cflags`
+CXXFLAGS = -Wall -Wextra -std=c++17 -I.    # -I. means: look in current dir + subfolders
 LDFLAGS = `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer
 
-SRC = main.cpp game.cpp Bird.cpp
+# Find all cpp files recursively
+SRC = $(wildcard *.cpp */*.cpp)
 OBJ = $(SRC:.cpp=.o)
 TARGET = flappybird
 
 all: $(TARGET)
 
-$(TARGET): $(SRC)
+$(TARGET): $(OBJ)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
 %.o: %.cpp

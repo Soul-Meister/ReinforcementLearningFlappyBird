@@ -1,14 +1,23 @@
 #include <iostream>
 #include <SDL2/SDL.h>
 
-#include "game.h"
-#include "Bird.h"
+#include "../game/game.h"
+#include "../Bird/Bird.h"
+#include "config.h"
+
 
 using namespace std;
 
-int main() {
+int window_height;
+int window_width;
+int target_fps;
 
-    int target_fps = 10;
+int main() {
+//declare globals
+    window_height = 800;
+    window_width = 800;
+    target_fps = 120;
+
     Uint32 frameDelay_ms = 1000/target_fps;
 
 
@@ -16,7 +25,7 @@ int main() {
         cout << "SDL_Init Error: " << SDL_GetError() << endl;
     }
 
-    SDL_Window *window = SDL_CreateWindow("SDL2", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, SDL_WINDOW_SHOWN);
+    SDL_Window *window = SDL_CreateWindow("SDL2", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, window_width, window_height, SDL_WINDOW_SHOWN);
 
     if (!window) {
         cout << "SDL_CreateWindow Error: " << SDL_GetError() << endl;
@@ -43,12 +52,12 @@ int main() {
                     running = false;
                 }
                 if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE) {
-                    cout << "SPACE" << endl;
                     has_clicked = true;
+                    bird.y_vel = -5;
                 }
             }
 
-            update(renderer, bird, has_clicked);
+            update(renderer, &bird, has_clicked);
 
             Uint32 frameTime = SDL_GetTicks() - startTime; // Calculate time taken for frame
 
