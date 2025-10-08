@@ -1,9 +1,17 @@
 #include <iostream>
 #include <SDL2/SDL.h>
 
+#include "game.h"
+#include "Bird.h"
+
 using namespace std;
 
 int main() {
+
+    int target_fps = 10;
+    Uint32 frameDelay_ms = 1000/target_fps;
+
+
     if (SDL_Init(SDL_INIT_VIDEO)) {
         cout << "SDL_Init Error: " << SDL_GetError() << endl;
     }
@@ -15,34 +23,39 @@ int main() {
         SDL_Quit();
         return 1;
     }
-
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+
 
     bool running = true;
     SDL_Event event;
 
-        while (running) {
+    bool has_clicked = false;
+    Bird bird = Bird();
+
+
+
+
+        while (running) {//main update loop
+            Uint32 startTime = SDL_GetTicks();
+
             while (SDL_PollEvent(&event)) {
                 if (event.type == SDL_QUIT) {
                     running = false;
                 }
                 if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE) {
-                    cout << "yo they pressed space bruh" << endl;
+                    cout << "SPACE" << endl;
+                    has_clicked = true;
                 }
             }
 
-            //Clear the window bro
-            SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-            SDL_RenderClear(renderer);
+            update(renderer, bird, has_clicked);
 
-            //make a yellow box (bird) bro
-            SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-            SDL_Rect bird = {390, 220, 20, 20, };
-            SDL_RenderFillRect(renderer, &bird);
+            Uint32 frameTime = SDL_GetTicks() - startTime; // Calculate time taken for frame
 
-            //show it bro
-            SDL_RenderPresent(renderer);
-            cout << "test";
+            // Cap FPS
+            if (frameTime < frameDelay_ms) {
+                SDL_Delay(frameDelay_ms - frameTime);
+            }
         }
     //ayo, clean it
     SDL_DestroyRenderer(renderer);
