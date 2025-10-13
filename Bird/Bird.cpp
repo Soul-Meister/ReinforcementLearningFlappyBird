@@ -5,6 +5,8 @@
 #include "Bird.h"
 #include <iostream>
 
+#include "../main/config.h"
+
 using namespace std;
 
 void Bird::update() {
@@ -17,7 +19,7 @@ void Bird::update() {
 Bird::Bird() {
     gravity = -0.13   ;
     x = 200;
-    y = 220;
+    y = window_height/2;
     width = 50;
     height = 50;
     y_vel = 0;

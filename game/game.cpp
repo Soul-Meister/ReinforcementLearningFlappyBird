@@ -61,3 +61,4 @@ bool check_collision(Bird* pbird, vector<Wall>* pwalls) {
 
     return false;
 }
+

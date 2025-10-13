@@ -28,7 +28,7 @@ int main() {
     //Declare variables
 
     int wall_delay_frames = 360;
-    int last_wall_spawn_frames = 0;
+    int last_wall_spawn_frames = wall_delay_frames;//will go to 0 then increment up; this is to immediately spawn onw
 
     vector<Wall> walls;
 
@@ -70,9 +70,17 @@ int main() {
                 if (event.type == SDL_QUIT) {
                     running = false;
                 }
-                if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE) {
+                if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE) {//check if space is pressed
                     has_clicked = true;
-                    bird.y_vel = -5;
+                    bird.y_vel = -5;//set bird velocity
+                }
+                if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_r) {//reset function
+                    has_clicked = false;
+                    walls.clear();
+                    bird.x =200;
+                    bird.y = window_height/2;
+                    bird.y_vel = 0;
+                    last_wall_spawn_frames = wall_delay_frames;
                 }
             }
 
@@ -81,7 +89,6 @@ int main() {
             if (last_wall_spawn_frames >= wall_delay_frames) {
                 last_wall_spawn_frames = 0;
                 walls.insert(walls.begin(), Wall());
-                cout << "WALL CREATED YO" << endl;
             }
 
             // Cap FPS
