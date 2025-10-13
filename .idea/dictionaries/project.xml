@@ -2,6 +2,8 @@
   <dictionary name="project">
     <words>
       <w>cxxflags</w>
+      <w>pbird</w>
+      <w>pwalls</w>
     </words>
   </dictionary>
 </component>

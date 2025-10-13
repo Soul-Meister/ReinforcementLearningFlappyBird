@@ -8,5 +8,7 @@
 extern int window_height;
 extern int window_width;
 extern int target_fps;
+extern int wall_speed;
+extern int gap_width_config;
 
 #endif //FLAPPYBIRD_CONFIG_H
