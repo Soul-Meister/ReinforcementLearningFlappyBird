@@ -90,7 +90,7 @@ int main() {
             }
 
 
-            if (!check_collision(&bird, &walls)) {
+            if (!check_collision(&bird, &walls)) {//check collisions
                 update(renderer, &bird, has_clicked, &walls);
             }
 
