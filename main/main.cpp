@@ -94,7 +94,7 @@ int main() {
                 update(renderer, &bird, has_clicked, &walls);
             }
 
-        }
+        }//test
     //ayo, clean it
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
