@@ -9,7 +9,7 @@ void update(SDL_Renderer *renderer, Bird* pbird, bool has_clicked, vector<Wall>*
     if (has_clicked) {//update per click
         pbird->update();//update bird
 
-        for (int i = 0; i < pwalls->size(); i++) {//updater for walls
+        for (int i = 0; i < static_cast<int>(pwalls->size()); i++) {//updater for walls
             pwalls->at(i).x_pos -= wall_speed;//update x position of walls relative to speed
             if (pwalls->at(i).x_pos+pwalls->at(i).width < 0) {
                   pwalls->erase(pwalls->begin() + i);
@@ -68,4 +68,21 @@ bool check_collision(Bird* pbird, vector<Wall>* pwalls) {
 
     return false;
 }
+
+vector<double> get_game_state(Bird* pBird, vector<Wall>* pwalls) {
+    //bird_x, bird_y, bird_y_vel, next_wall_x, next_next_wall_x, next_wall_y, next_next_wall_y
+    for (int i = 0; i < static_cast<int>(pwalls->size()); i++) {
+        if (!pwalls->at(i).is_scored) {
+            if (pwalls->size() > 1) {//If we have at least two walls, return the next two walls of data
+                return vector<double>{pBird->x, pBird->y, pBird->y_vel, pwalls->at(i).x_pos, pwalls->at(i+1).x_pos, pwalls->at(i).y_pos, pwalls->at(i+1).y_pos};
+            }
+            else {//else, return just the next wall. THERE WILL ALWAYS BE AT LEAST ONE WALL
+                return vector<double>{pBird->x, pBird->y, pBird->y_vel, pwalls->at(i).x_pos, 0, pwalls->at(i).y_pos, 0};
+
+            }
+        }
+    }
+    return vector<double>{0, 0, 0, 0, 0, 0, 0};
+}
+
 

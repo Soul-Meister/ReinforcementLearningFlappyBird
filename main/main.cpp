@@ -10,19 +10,30 @@
 
 using namespace std;
 
+//game globals
 int window_height;
 int window_width;
 int target_fps;
 int gap_width_config;
 int wall_speed;
 
+//agent globals
+int replay_buffer_size;
+int replay_buffer_sample_size;
+
+
+
 int main() {
-    //declare globals
-    window_height = 400;
-    window_width = 500;
+    //declare game globals
+    window_height = 1200;
+    window_width = 1600;
     target_fps = 120;
     gap_width_config = 80;
     wall_speed = 1;
+
+    //declare agent globals
+    replay_buffer_size = 100000;
+    replay_buffer_sample_size = 128; //64-128
 
 
     //Declare variables
@@ -31,6 +42,8 @@ int main() {
     int last_wall_spawn_frames = wall_delay_frames;//will go to 0 then increment up; this is to immediately spawn onw
 
     vector<Wall> walls;
+    vector<double> game_state(7); //bird_x, bird_y, bird_y_vel, next_wall_x, next_next_wall_x, next_wall_y, next_next_wall_y
+    vector<vector<double>> replay_buffer;
 
     Uint32 frameDelay_ms = 1000/target_fps;
 
@@ -97,11 +110,16 @@ int main() {
             }
 
 
-           // if (!check_collision(&bird, &walls)) {//check collisions
-                update(renderer, &bird, has_clicked, &walls);
-            //}
+           if (!check_collision(&bird, &walls)) {//check collisions
+                update(renderer, &bird, has_clicked, &walls);//main update function
+               game_state = get_game_state(&bird, &walls);//update game state
+                replay_buffer.push_back(game_state);//add current gamestate to replay buffer
+               if (replay_buffer.size() > replay_buffer_size) {//if buffer exceeds max size, delete oldest entry
+                   replay_buffer.erase(replay_buffer.begin());
+               }
+            }
 
-        }//test
+        }
     //ayo, clean it
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);

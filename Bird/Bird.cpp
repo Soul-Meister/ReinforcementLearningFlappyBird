@@ -12,7 +12,7 @@ using namespace std;
 void Bird::update() {
     y_vel -= gravity;
     y += y_vel;
-    cout << "\rY_Pos: " << y << "   Y_Vel: " << y_vel << "      " << std::flush;
+    //cout << "\rY_Pos: " << y << "   Y_Vel: " << y_vel << "      " << std::flush;
 
 }
 

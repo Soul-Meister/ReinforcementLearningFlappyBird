@@ -18,5 +18,6 @@ void update(SDL_Renderer*, Bird*, bool, vector<Wall> *);
 void render(SDL_Renderer*, Bird*, vector<Wall> *);
 bool check_collision(Bird*, vector<Wall> *);
 void reset();
+vector<double> get_game_state(Bird* pbird, vector<Wall>* pwalls);
 
 #endif //FLAPPYBIRD_GAME_H
