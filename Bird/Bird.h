@@ -14,6 +14,7 @@ class Bird {
         double width;
         double height;
         double y_vel;
+        int score;
 
     Bird();
     void update();

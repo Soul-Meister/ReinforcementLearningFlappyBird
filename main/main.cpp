@@ -18,8 +18,8 @@ int wall_speed;
 
 int main() {
     //declare globals
-    window_height = 1200;
-    window_width = 1600;
+    window_height = 400;
+    window_width = 500;
     target_fps = 120;
     gap_width_config = 80;
     wall_speed = 1;
@@ -88,7 +88,7 @@ int main() {
             Uint32 frameTime = SDL_GetTicks() - startTime; // Calculate time taken for frame
             if (last_wall_spawn_frames >= wall_delay_frames) {
                 last_wall_spawn_frames = 0;
-                walls.insert(walls.begin(), Wall());
+                walls.push_back(Wall());
             }
 
             // Cap FPS
@@ -97,9 +97,9 @@ int main() {
             }
 
 
-            if (!check_collision(&bird, &walls)) {//check collisions
+           // if (!check_collision(&bird, &walls)) {//check collisions
                 update(renderer, &bird, has_clicked, &walls);
-            }
+            //}
 
         }//test
     //ayo, clean it

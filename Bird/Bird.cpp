@@ -23,4 +23,5 @@ Bird::Bird() {
     width = 50;
     height = 50;
     y_vel = 0;
+    score = 0;
 }

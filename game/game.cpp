@@ -2,19 +2,26 @@
 #include "../main/config.h"
 #include <SDL2/SDL.h>
 
+#include <iostream>
+
 
 void update(SDL_Renderer *renderer, Bird* pbird, bool has_clicked, vector<Wall>* pwalls) {
-    if (has_clicked) {
+    if (has_clicked) {//update per click
         pbird->update();//update bird
 
-        for (Wall &wall : *pwalls) {
-            wall.x_pos -= wall_speed;//update x position of walls relative to speed
+        for (int i = 0; i < pwalls->size(); i++) {//updater for walls
+            pwalls->at(i).x_pos -= wall_speed;//update x position of walls relative to speed
+            if (pwalls->at(i).x_pos+pwalls->at(i).width < 0) {
+                  pwalls->erase(pwalls->begin() + i);
+            }
+            if (pwalls->at(i).x_pos+pwalls->at(i).width < pbird->x && !pwalls->at(i).is_scored) {
+                pwalls->at(i).is_scored = true;
+                pbird->score++;
+                cout << "Score: " << pbird->score << endl;
+            }
         }
-
     }
-
     render(renderer, pbird, pwalls);
-
 }
 
 void render(SDL_Renderer *renderer, Bird* pbird, vector<Wall>* pwalls) {

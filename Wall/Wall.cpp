@@ -28,4 +28,6 @@ Wall::Wall() {
 
     gap_size = gap_width_config;
 
+    is_scored = false;
+
 }

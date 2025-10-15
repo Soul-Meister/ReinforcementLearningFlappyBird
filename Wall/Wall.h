@@ -13,6 +13,7 @@ public:
     int width;
     int height;
     int gap_size;
+    bool is_scored;
 
     Wall();
 };
