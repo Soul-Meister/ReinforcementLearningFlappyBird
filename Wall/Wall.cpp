@@ -11,12 +11,11 @@
 Wall::Wall() {
 
 
-    const unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+    const unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();//epic number gen
 
-    // Mersenne Twister PRNG
+    // Mersenne Twister
     std::mt19937 rng(seed);
 
-    // Example distributions
     std::uniform_int_distribution<int> distInt(1, window_height);    // random int [1,<height of window>]
 
 

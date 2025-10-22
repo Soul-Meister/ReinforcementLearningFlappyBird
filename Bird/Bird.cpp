@@ -19,7 +19,7 @@ void Bird::update() {
 Bird::Bird() {
     gravity = -0.13   ;
     x = 200;
-    y = window_height/2;
+    y = window_height_config/2;
     width = 50;
     height = 50;
     y_vel = 0;

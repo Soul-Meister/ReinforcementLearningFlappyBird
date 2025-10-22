@@ -10,7 +10,7 @@ void update(SDL_Renderer *renderer, Bird* pbird, bool has_clicked, vector<Wall>*
         pbird->update();//update bird
 
         for (int i = 0; i < static_cast<int>(pwalls->size()); i++) {//updater for walls
-            pwalls->at(i).x_pos -= wall_speed;//update x position of walls relative to speed
+            pwalls->at(i).x_pos -= wall_speed_config;//update x position of walls relative to speed
             if (pwalls->at(i).x_pos+pwalls->at(i).width < 0) {
                   pwalls->erase(pwalls->begin() + i);
             }

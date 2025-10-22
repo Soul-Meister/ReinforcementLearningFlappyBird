@@ -15,25 +15,31 @@ int window_height;
 int window_width;
 int target_fps;
 int gap_width_config;
-int wall_speed;
+int wall_speed_config;
 
 //agent globals
-int replay_buffer_size;
-int replay_buffer_sample_size;
+int replay_buffer_size_config;
+int replay_buffer_sample_size_config;
 
 
 
 int main() {
+
+
     //declare game globals
     window_height = 1200;
     window_width = 1600;
     target_fps = 120;
     gap_width_config = 80;
-    wall_speed = 1;
+    wall_speed_config = 1;
 
     //declare agent globals
-    replay_buffer_size = 100000;
-    replay_buffer_sample_size = 128; //64-128
+    replay_buffer_size_config = 100000;
+    replay_buffer_sample_size_config = 128; //64-128
+    learning_rate_config = 0.001;
+
+    //network variables -- {inputs, hidden, hidden ... hidden, output}
+    network_config = {7, 100, 100, 100, 1};
 
 
     //Declare variables
@@ -46,8 +52,6 @@ int main() {
     vector<vector<double>> replay_buffer;
 
     Uint32 frameDelay_ms = 1000/target_fps;
-
-
 
 
     if (SDL_Init(SDL_INIT_VIDEO)) {
@@ -114,7 +118,7 @@ int main() {
                 update(renderer, &bird, has_clicked, &walls);//main update function
                game_state = get_game_state(&bird, &walls);//update game state
                 replay_buffer.push_back(game_state);//add current gamestate to replay buffer
-               if (replay_buffer.size() > replay_buffer_size) {//if buffer exceeds max size, delete oldest entry
+               if ((int)replay_buffer.size() > (int)replay_buffer_size_config) {//if buffer exceeds max size, delete oldest entry
                    replay_buffer.erase(replay_buffer.begin());
                }
             }

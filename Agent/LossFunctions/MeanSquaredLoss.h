@@ -6,7 +6,7 @@
 #define FLAPPYBIRD_MEANSQUAREDLOSS_H
 
 
-class meanSquaredLoss {
+class MeanSquaredLoss {
 };
 
 
