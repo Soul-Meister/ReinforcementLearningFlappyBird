@@ -14,6 +14,9 @@ class Layer {
 private:
     vector<Neuron> neurons;
 public:
+    vector<float> get_activations() const;
+    Layer(int size, int weights_size);
+    vector<Neuron>& get_neurons();
     int get_layer_size();
 };
 

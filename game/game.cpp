@@ -76,7 +76,7 @@ vector<double> get_game_state(Bird* pBird, vector<Wall>* pwalls) {
             if (pwalls->size() > 1) {//If we have at least two walls, return the next two walls of data
                 return vector<double>{pBird->x, pBird->y, pBird->y_vel, pwalls->at(i).x_pos, pwalls->at(i+1).x_pos, pwalls->at(i).y_pos, pwalls->at(i+1).y_pos};
             }
-            else {//else, return just the next wall. THERE WILL ALWAYS BE AT LEAST ONE WALL
+            else {//else, return just the next wall. THERE WILL ALWAYS BE AT LEAST ONE WALL -- i hope
                 return vector<double>{pBird->x, pBird->y, pBird->y_vel, pwalls->at(i).x_pos, 0, pwalls->at(i).y_pos, 0};
 
             }

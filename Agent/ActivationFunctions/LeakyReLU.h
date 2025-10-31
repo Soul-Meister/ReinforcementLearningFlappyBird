@@ -13,9 +13,9 @@ class LeakyReLU {
 private:
     double alpha;
 public:
-
-    vector<double> LeakYReLU(vector<double> input);
-
+    LeakyReLU();
+    float activate(float input);
+    float derivative(float input);
 };
 
 

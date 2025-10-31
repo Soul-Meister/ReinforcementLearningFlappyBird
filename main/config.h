@@ -17,13 +17,25 @@ extern int gap_width_config;
 
 //Replay buffer parameters
 extern int replay_buffer_size_config;
-extern int replay_buffer_sample_size_config;4\
+extern int replay_buffer_sample_size_config;
 
 //Learning rate
 extern double learning_rate_config;
+extern float bias_config;
 
 //network config
 extern std::vector<int> network_config;
+
+//Policy -- NOT ALL WILL BE USED< DEPENDING ON SELECTED POLICY
+extern double policy_decay_config;
+
+//Activation Function Config -- NOT ALL WILL BE USED, USAGE BASED ON SELECTED POLICY
+extern float alpha_config;
+
+
+//REQUIREMENTS
+//leaky ReLU - alpha
+
 
 //selected config
 

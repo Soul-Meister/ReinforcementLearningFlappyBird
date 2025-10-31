@@ -7,6 +7,11 @@
 
 
 class EpsilonGreedyPolicy {
+public:
+
+private:
+
+
 };
 
 

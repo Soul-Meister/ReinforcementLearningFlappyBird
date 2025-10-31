@@ -3,7 +3,7 @@ CXXFLAGS = -Wall -Wextra -std=c++17 -I.    # -I. means: look in current dir + su
 LDFLAGS = `sdl2-config --libs` -lSDL2_image -lSDL2_ttf -lSDL2_mixer
 
 # Find all cpp files recursively
-SRC = $(wildcard *.cpp */*.cpp)
+SRC = $(shell find . -name "*.cpp")
 OBJ = $(SRC:.cpp=.o)
 TARGET = flappybird
 

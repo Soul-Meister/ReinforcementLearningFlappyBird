@@ -7,14 +7,17 @@
 
 #include <string>
 #include <vector>
-#include "../Nueron/Neuron.h"
 #include "../Layer/Layer.h"
 
 class Network {
 private:
-    vector<vector<Neuron>> layers;
+    vector<Layer> layers;
+    vector<float> last_input;
 public:
     Network();
+    void init();
+    vector<float> forward(const vector<float> &input);
+    void backward(const vector<float>& target);
     int get_layer_num();
     void add_layer(vector<Neuron> layer);
 

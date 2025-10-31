@@ -7,20 +7,32 @@
 #include <vector>
 
 
+using namespace std;
+
+
 class Neuron {
+private:
+    std::vector<float> weights;
+    float bias;
+    float learning_rate;
 
 public:
-    Neuron();
-    double forward();
-    void update_weights();
-    double get_output();
-    void print();
-private:
-    std::vector<double> weights;
-    double bias;
-    double output;
-    double learning_rate;
+    float z;      // pre-activation sum
+    float a;      // output after activation
+    float delta;  // backpropagated error
+
+    explicit Neuron(int weights_size);
+
+    void set_weights();
+
+    float get_bias() const;
+
+    void set_bias(float val);
+
+
+    std::vector<float>& get_weights();
 };
 
 
-#endif //FLAPPYBIRD_NEURON_H
+
+#endif //FLAPPYBIRD_NUERON_H
