@@ -45,7 +45,6 @@ void Network::init() {//HE init for leakyReLU
             vector<float> &weights = neuron.get_weights();
             for (float &w : weights) {
                 w = dist(gen);
-                cout << w << " ";
             }
         }
     }
@@ -59,36 +58,36 @@ vector<float> Network::forward(const vector<float>& input) {
 
     for (size_t k = 0; k < layers.size(); ++k) {
         Layer& layer = layers[k];
-        std::vector<float> next(layer.get_layer_size());
+        vector<float> next(layer.get_layer_size());
 
-        for (size_t i = 0; i < static_cast<size_t>(layer.get_layer_size()); ++i) {
+        for (size_t i = 0; i < layer.get_layer_size(); ++i) {
             Neuron& neuron = layer.get_neurons()[i];
-            const std::vector<float>& weights = neuron.get_weights();
+            const vector<float>& weights = neuron.get_weights();
             float z = neuron.get_bias();
 
-            // Dot product: z = w·activations + b
-            // (weights.size() should equal activations.size())
-            for (size_t j = 0; j < weights.size(); ++j) {
+            for (size_t j = 0; j < weights.size(); ++j)
                 z += weights[j] * activations[j];
-            }
 
-            // Apply activation on hidden layers
-            next[i] = (k < layers.size() - 1) ? act.activate(z) : z;
+            float activated = (k < layers.size() - 1)
+                ? act.activate(z)
+                : z;
 
             neuron.z = z;
-            neuron.a = (k < layers.size() - 1) ? act.activate(z) : z;
+            neuron.a = activated;
+            next[i] = activated;
         }
 
-        activations.swap(next); // move to next layer’s input
+        activations.swap(next);
     }
 
-    return activations; // final output vector (size = last layer size)
+    return activations;
 }
 
-void Network::backward(const std::vector<float>& target) {
+
+void Network::backward(const vector<float>& target) {
     LeakyReLU act;
 
-    // ---------- Output layer ----------
+    // Output layer
     Layer& outputLayer = layers.back();
     for (size_t j = 0; j < outputLayer.get_layer_size(); ++j) {
         Neuron& neuron = outputLayer.get_neurons()[j];
@@ -96,36 +95,36 @@ void Network::backward(const std::vector<float>& target) {
         neuron.delta = error * act.derivative(neuron.z);
     }
 
-    // ---------- Hidden layers ----------
-    for (int l = layers.size() - 2; l >= 0; --l) {
+    // Hidden layers
+    for (int l = static_cast<int>(layers.size()) - 2; l >= 0; --l) {
         Layer& current = layers[l];
         Layer& next = layers[l + 1];
 
         for (size_t j = 0; j < current.get_layer_size(); ++j) {
             float sum = 0.0f;
-            for (size_t k = 0; k < next.get_layer_size(); ++k) {
+            for (size_t k = 0; k < next.get_layer_size(); ++k)
                 sum += next.get_neurons()[k].get_weights()[j] * next.get_neurons()[k].delta;
-            }
+
             current.get_neurons()[j].delta = sum * act.derivative(current.get_neurons()[j].z);
         }
     }
 
-    // ---------- Weight updates ----------
+    // Weight updates
     for (size_t l = 0; l < layers.size(); ++l) {
-        std::vector<float> prev_activations;
-        if (l == 0)
-            prev_activations = last_input;  // store this from forward()
-        else
-            prev_activations = layers[l - 1].get_activations();
+        vector<float> prev_activations = (l == 0)
+            ? last_input
+            : layers[l - 1].get_activations();
 
         for (Neuron& neuron : layers[l].get_neurons()) {
-            for (size_t w = 0; w < neuron.get_weights().size(); ++w) {
-                neuron.get_weights()[w] -= learning_rate_config * neuron.delta * prev_activations[w];
-            }
+            auto& weights = neuron.get_weights();
+            for (size_t w = 0; w < weights.size(); ++w)
+                weights[w] -= learning_rate_config * neuron.delta * prev_activations[w];
+
             neuron.set_bias(neuron.get_bias() - learning_rate_config * neuron.delta);
         }
     }
 }
+
 
 
 

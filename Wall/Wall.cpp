@@ -16,13 +16,12 @@ Wall::Wall() {
     // Mersenne Twister
     std::mt19937 rng(seed);
 
-    std::uniform_int_distribution<int> distInt(1, window_height_config);    // random int [1,<height of window>]
-
+    std::uniform_real_distribution<float> distInt(gap_width_config/1.9, window_height_config-gap_width_config/1.9);    // random int [1,<height of window>]
 
     width = 50;
     height = window_height_config;
 
-    x_pos = window_height_config+width;//just outside the window
+    x_pos = static_cast<float>(window_width_config+width);//just outside the window
     y_pos = distInt(rng);
 
     gap_size = gap_width_config;

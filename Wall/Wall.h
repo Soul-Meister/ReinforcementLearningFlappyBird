@@ -8,8 +8,8 @@
 
 class Wall {
 public:
-    double x_pos;
-    double y_pos;
+    float x_pos;
+    float y_pos;
     int width;
     int height;
     int gap_size;

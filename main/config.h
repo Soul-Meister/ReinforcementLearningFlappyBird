@@ -9,6 +9,10 @@
 #include <vector>
 
 
+
+
+extern int game_mode;
+
 extern int window_height_config;
 extern int window_width_config;
 extern int target_fps_config;
@@ -27,10 +31,16 @@ extern float bias_config;
 extern std::vector<int> network_config;
 
 //Policy -- NOT ALL WILL BE USED< DEPENDING ON SELECTED POLICY
-extern double policy_decay_config;
+extern float min_epsilon_config;
+extern float policy_decay_config;
+
+//discount rate
+extern float gamma_config;
 
 //Activation Function Config -- NOT ALL WILL BE USED, USAGE BASED ON SELECTED POLICY
 extern float alpha_config;
+
+
 
 
 //REQUIREMENTS

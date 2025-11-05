@@ -5,6 +5,13 @@
 #include <iostream>
 
 
+float normalize(float value, float min, float max) {
+    if (max == min) return 0.0f;
+    return 2.0f * ((value - min) / (max - min)) - 1.0f;
+}
+
+
+
 void update(SDL_Renderer *renderer, Bird* pbird, bool has_clicked, vector<Wall>* pwalls) {
     if (has_clicked) {//update per click
         pbird->update();//update bird
@@ -17,6 +24,7 @@ void update(SDL_Renderer *renderer, Bird* pbird, bool has_clicked, vector<Wall>*
             if (pwalls->at(i).x_pos+pwalls->at(i).width < pbird->x && !pwalls->at(i).is_scored) {
                 pwalls->at(i).is_scored = true;
                 pbird->score++;
+                pbird->unchecked_score = true;
                 cout << "Score: " << pbird->score << endl;
             }
         }
@@ -53,36 +61,100 @@ void render(SDL_Renderer *renderer, Bird* pbird, vector<Wall>* pwalls) {
 }
 
 bool check_collision(Bird* pbird, vector<Wall>* pwalls) {
-    for (Wall wall : *pwalls) {
-        if (wall.x_pos < pbird->x + pbird->width) {
-            if (wall.x_pos + wall.width > pbird->x) {//initial x checks
-                if (wall.y_pos - wall.gap_size > pbird->y) {//upper
-                    return true;
-                }
-                if (wall.y_pos + wall.gap_size < pbird->y + pbird->height) {//lower
-                    return true;
-                }
-            }
+    // top/bottom
+    if (pbird->y < 0) return true;
+    if (pbird->y + pbird->height > window_height_config) return true;
+
+    for (const Wall& wall : *pwalls) {
+        if (wall.x_pos < pbird->x + pbird->width && wall.x_pos + wall.width > pbird->x) {
+            // top rect
+            if (pbird->y < wall.y_pos - wall.gap_size) return true;
+            // bottom rect
+            if (pbird->y + pbird->height > wall.y_pos + wall.gap_size) return true;
         }
     }
-
     return false;
 }
 
-vector<double> get_game_state(Bird* pBird, vector<Wall>* pwalls) {
+
+vector<float> get_game_state(Bird* pBird, vector<Wall>* pwalls) {
     //bird_x, bird_y, bird_y_vel, next_wall_x, next_next_wall_x, next_wall_y, next_next_wall_y
     for (int i = 0; i < static_cast<int>(pwalls->size()); i++) {
         if (!pwalls->at(i).is_scored) {
             if (pwalls->size() > 1) {//If we have at least two walls, return the next two walls of data
-                return vector<double>{pBird->x, pBird->y, pBird->y_vel, pwalls->at(i).x_pos, pwalls->at(i+1).x_pos, pwalls->at(i).y_pos, pwalls->at(i+1).y_pos};
+                return vector<float>{
+                    normalize(pBird->x, 0, window_width_config),
+                    normalize(pBird->y, 0, window_height_config),
+                    normalize(pBird->y_vel, -10, 10),
+                    normalize(pwalls->at(i).x_pos, 0, window_width_config),
+                    normalize(pwalls->at(i+1).x_pos, 0, window_width_config),
+                    normalize(pwalls->at(i).y_pos,  gap_width_config/1.9, window_height_config-gap_width_config/1.9),
+                    normalize(pwalls->at(i+1).y_pos,  gap_width_config/1.9, window_height_config-gap_width_config/1.9),
+                };
             }
             else {//else, return just the next wall. THERE WILL ALWAYS BE AT LEAST ONE WALL -- i hope
-                return vector<double>{pBird->x, pBird->y, pBird->y_vel, pwalls->at(i).x_pos, 0, pwalls->at(i).y_pos, 0};
+                return vector<float>{
+                    normalize(pBird->x, 0, window_width_config),
+                    normalize(pBird->y, 0, window_height_config),
+                    normalize(pBird->y_vel, -10, 10),
+                    normalize(pwalls->at(i).x_pos,  0, window_width_config),
+                    0,
+                    normalize(pwalls->at(i).y_pos, gap_width_config/1.9, window_height_config-gap_width_config/1.9),
+                    0
+                };
 
             }
         }
     }
-    return vector<double>{0, 0, 0, 0, 0, 0, 0};
+    return vector<float>{0, 0, 0, 0, 0, 0, 0};
 }
+
+//bird_x, bird_y, bird_y_vel, next_wall_x, next_next_wall_x, next_wall_y, next_next_wall_y
+
+double get_reward(const vector<float>& state, Bird* bird, bool done) {
+    double reward = 0.0;
+
+    // ─────────────────────────────────────────────
+    // 1. Reward for being alive (encourages surviving)
+    reward += 0.10;  // small positive reward every frame
+
+    // ─────────────────────────────────────────────
+    // 2. Shaping: encourage alignment with the gap center
+    // state[1] = bird_y (normalized)
+    // state[5] = next_wall_y (normalized)
+    double vertical_distance = fabs(state[1] - state[5]);  // 0 is perfect alignment
+    reward += (1.0 - vertical_distance);  // max +1, min negative if far
+
+    // ─────────────────────────────────────────────
+    // 3. Punish vertical speed (flapping too aggressively)
+    // state[2] = bird_y_vel (normalized -1 to 1 ideally)
+    double vel_penalty = fabs(state[2]);
+    reward -= 0.05 * vel_penalty;  // gentle penalty
+
+    // ─────────────────────────────────────────────
+    // 4. Encourage moving forward toward pipes
+    // state[3] = next_wall_x (normalized 0 to 1, smaller = closer)
+    // So we reward (1 - x), bigger when close to pipe
+    double dist_to_wall = state[3];
+    reward += 0.05 * (1.0 - dist_to_wall);
+
+    // ─────────────────────────────────────────────
+    // 5. Big reward for passing a pipe
+    if (bird->unchecked_score) {
+        bird->unchecked_score = false;
+        reward += 30.0;   // Not too huge, keeps training stable
+    }
+
+    // ─────────────────────────────────────────────
+    // 6. Big punishment for dying
+    if (done) {
+        reward -= 50.0;
+    }
+
+    return reward;
+}
+
+
+
 
 

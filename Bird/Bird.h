@@ -8,13 +8,14 @@
 
 class Bird {
     public:
-        double gravity;
-        double x;
-        double y;
-        double width;
-        double height;
-        double y_vel;
+        float gravity;
+        float x;
+        float y;
+        float width;
+        float height;
+        float y_vel;
         int score;
+        bool unchecked_score;
 
     Bird();
     void update();
