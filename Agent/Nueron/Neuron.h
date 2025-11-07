@@ -22,6 +22,9 @@ public:
     float delta;  // backpropagated error
 
     explicit Neuron(int weights_size);
+    Neuron(const Neuron& other);
+
+    Neuron &operator=(const Neuron &other);
 
     void set_weights();
 

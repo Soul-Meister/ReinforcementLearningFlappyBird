@@ -40,6 +40,8 @@ extern float gamma_config;
 //Activation Function Config -- NOT ALL WILL BE USED, USAGE BASED ON SELECTED POLICY
 extern float alpha_config;
 
+extern bool render_config;
+
 
 
 

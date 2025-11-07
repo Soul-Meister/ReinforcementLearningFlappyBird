@@ -16,6 +16,11 @@ private:
 public:
     vector<float> get_activations() const;
     Layer(int size, int weights_size);
+
+    Layer(const Layer &other);
+
+    Layer &operator=(const Layer &other);
+
     vector<Neuron>& get_neurons();
     int get_layer_size();
 };

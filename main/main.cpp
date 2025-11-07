@@ -43,6 +43,8 @@ float gamma_config;
 vector<int> network_config;
 
 //activation function
+
+bool render_config;
 float alpha_config;
 
 struct Transition {
@@ -69,31 +71,34 @@ int main() {
     window_height_config = 1200;
     window_width_config = 1600;
     target_fps_config = 120;
-    gap_width_config = 110;
+    gap_width_config = 200;
     wall_speed_config = 1;
 
     //declare agent globals
     replay_buffer_size_config = 100000;
-    replay_buffer_sample_size_config = 128; //64-128
-    learning_rate_config = 0.001;
-    bias_config = 0.01f;
+    replay_buffer_sample_size_config = 32; //64-128
+    learning_rate_config = 0.00005;
+    bias_config = 0.0f;
 
     //policy
-    min_epsilon_config = 0.001;
-    policy_decay_config = 0.001;
+    min_epsilon_config = 0.000;
+    policy_decay_config = 0.0000001;
 
     //discount factor
-    gamma_config = 0.99f;
+    gamma_config = 0.98f;
 
     //activation function
     alpha_config = 0.01f;
 
     //network variables -- {inputs, hidden, hidden ... hidden, output}
-    network_config = {20, 20, 20, 2};
+    network_config = {64, 64, 2};
 
     //wall creation
-    int wall_delay_frames = 360;
+    int wall_delay_frames = 500;
     int last_wall_spawn_frames = wall_delay_frames;//will go to 0 then increment up; this is to immediately spawn one
+
+    //render or not
+    render_config = true;
 
 
     vector<Wall> walls;
@@ -114,7 +119,7 @@ int main() {
     // create RNG engine (seeded by time)
     static std::mt19937 rng(std::chrono::steady_clock::now().time_since_epoch().count());
     std::uniform_real_distribution<float> real_dist(0.0f, 1.0f);
-    std::uniform_int_distribution<int> action_dist(0, 1);
+    std::uniform_int_distribution<int> action_dist(0, 75);//1 in 75 chance for the epsilon choice to actually be jump; makes it better for learning rates
 
 
 
@@ -163,6 +168,7 @@ int main() {
                 if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_s) {//speed toggle
                     speed_toggle = !speed_toggle;
                 }
+
             }
 
 
@@ -181,7 +187,7 @@ int main() {
 
 
            if (!check_collision(&bird, &walls)) {//check collisions, if not
-               update(renderer, &bird, has_clicked, &walls);//main update function
+               update(renderer, &bird, has_clicked, &walls, render_config);//main update function
             }
 
         }
@@ -193,13 +199,21 @@ int main() {
         }
 
             break;
-        case 1: {
-            //train model headed
+        case 1: { //train model headed
+            double episodes = 0;
+            double flaps = 0;
+            double iterations = 0;
+            int max_score = 0;
+            size_t frame_count = 0;
+            size_t train_steps = 0;
+            const size_t TARGET_UPDATE_INTERVAL = 1000;
 
             //Model Reqs init
             Network network = Network();
             auto policy = EpsilonGreedyPolicy(policy_decay_config, min_epsilon_config);
             network.init();
+            Network target_network = network;
+            int target_update_interval = 2000;
 
 
             if (SDL_Init(SDL_INIT_VIDEO)) {
@@ -241,6 +255,9 @@ int main() {
                         //speed toggle
                         speed_toggle = !speed_toggle;
                     }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_h) {//speed toggle
+                        render_config = !render_config;
+                    }
                 }
 
 
@@ -263,22 +280,40 @@ int main() {
                 auto initial_game_state = game_state;
                 auto q_values = network.forward(game_state); //assign result to memory to avoid multiple calls
 
-                // epsilon-greedy action selection
-                int action = (real_dist(rng) < policy.getEpsilon())
-                               ? action_dist(rng)                             // explore
-                               : (q_values[0] > q_values[1] ? 0 : 1);            //exploit
+                // ε-greedy with unbiased greedy tie
+                int greedy =
+                    (q_values[0] > q_values[1]) ? 0 :
+                    (q_values[1] > q_values[0]) ? 1 :
+                    action_dist(rng); // random on tie
+
+                int action = (real_dist(rng) < policy.getEpsilon()) ? action_dist(rng) == 1 ? 1 : 0 : greedy;
 
                 if (action == 1) {
                     bird.y_vel = -5;
+                    flaps++;
                 }
+                iterations++;
 
                 //update the game with model choice
-                update(renderer, &bird, has_clicked, &walls);
+                update(renderer, &bird, has_clicked, &walls, render_config);
 
                 //get post model choice data
                 game_state = get_game_state(&bird, &walls); //retrieve game state
+
                 double reward = get_reward(game_state, &bird, check_collision(&bird, &walls));
-                cout << "Reward: " << reward  <<  "  Epsilon: " << policy.getEpsilon() << endl;
+                if (action == 1) {
+                    reward = -0.01;
+                }
+                //cout << flush;
+                if (bird.score > max_score) {
+                    max_score = bird.score;
+                }
+                if (static_cast<int>(iterations) % 100 == 0) {
+                    cout << "Reward: " << reward  <<  "  Epsilon: " << policy.getEpsilon() << " Episodes: " << episodes << " Flap Rate: " << flaps/iterations <<  " Max Score: " << max_score << "\n";
+                    cout << q_values[0] << " " << q_values[1] << " \n";
+                }
+
+
 
 
                 //save data to a replay buffer
@@ -291,31 +326,45 @@ int main() {
                 });
 
                 // Training phase (sample batch from replay buffer)
-                if (replay_buffer.size() > replay_buffer_sample_size_config) {
-                    // sample random batch of transitions
-                    for (int n = 0; n < replay_buffer_sample_size_config; ++n) {
 
-                        std::uniform_int_distribution<size_t> idx_dist(0, replay_buffer.size() - 1);
+                if (replay_buffer.size() > replay_buffer_sample_size_config) {
+                    std::uniform_int_distribution<size_t> idx_dist(0, replay_buffer.size() - 1);
+
+                    for (int n = 0; n < replay_buffer_sample_size_config; ++n) {
                         const Transition& t = replay_buffer[idx_dist(rng)];
 
-                        // forward pass: Q(s)
-                        std::vector<float> q_current = network.forward(t.state);
+                        // Double DQN target
+                        std::vector<float> q_next_online = network.forward(t.next_state);
+                        int a_star = int(std::distance(
+                            q_next_online.begin(),
+                            std::max_element(q_next_online.begin(), q_next_online.end())
+                        ));
 
-                        // forward pass: Q(s')
-                        std::vector<float> q_next = network.forward(t.next_state);
-                        float max_next = *max_element(q_next.begin(), q_next.end());
+                        std::vector<float> q_next_target = target_network.forward(t.next_state);
+                        float next_val = q_next_target[a_star];
 
-                        // build target vector (same size as output)
-                        std::vector<float> target = q_current;
-                        target[t.action] = t.reward + (t.done ? 0.0f : gamma_config * max_next);
+                        float bootstrap = t.done ? 0.0f : gamma_config * next_val;
 
-                        // backpropagate loss (Q-learning)
-                        network.backward(target);
+                        std::vector<float> q_cur = network.forward(t.state);
+                        std::vector<float> target = q_cur;
+                        target[t.action] = static_cast<float>(t.reward) + bootstrap;
+
+
+                        {
+                            network.backward(target);  // only one thread at a time
+                        }
+                        train_steps++;
                     }
 
-                    // Decay epsilon after each training step
+                    // Periodic hard update of target net
+                    if (train_steps % TARGET_UPDATE_INTERVAL == 0) {
+                        target_network = network;
+                    }
+
                     policy.decay();
                 }
+
+
 
                 //make sure replay buffer remains within buffer size limit
                 if ((int) replay_buffer.size() > replay_buffer_size_config) {
@@ -331,6 +380,8 @@ int main() {
                     bird.y = window_height_config / 2;
                     bird.y_vel = 0;
                     last_wall_spawn_frames = wall_delay_frames;
+                    episodes++;
+                    bird.score = 0;
                 }
 
 

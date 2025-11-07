@@ -15,6 +15,13 @@ private:
     vector<float> last_input;
 public:
     Network();
+
+    Network(const Network &other);
+
+    Network &operator=(const Network &other);
+
+    void copy_from(const Network &other);
+
     void init();
     vector<float> forward(const vector<float> &input);
     void backward(const vector<float>& target);

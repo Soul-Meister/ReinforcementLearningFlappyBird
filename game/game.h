@@ -14,7 +14,7 @@ using namespace std;
 #ifndef FLAPPYBIRD_GAME_H
 #define FLAPPYBIRD_GAME_H
 
-void update(SDL_Renderer*, Bird*, bool, vector<Wall> *);
+void update(SDL_Renderer*, Bird*, bool, vector<Wall> *, bool render_);
 void render(SDL_Renderer*, Bird*, vector<Wall> *);
 bool check_collision(Bird*, vector<Wall> *);
 void reset();

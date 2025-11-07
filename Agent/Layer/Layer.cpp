@@ -10,6 +10,18 @@ Layer::Layer(int size, int weights_size) {
             neurons.push_back(Neuron(weights_size));
     }
 }
+Layer::Layer(const Layer& other) {
+    if (this != &other) {
+        neurons = other.neurons;
+    }
+}
+
+Layer& Layer::operator=(const Layer& other) {
+    if (this != &other) {
+        neurons = other.neurons;
+    }
+    return *this;
+}
 
 
 int Layer::get_layer_size() {

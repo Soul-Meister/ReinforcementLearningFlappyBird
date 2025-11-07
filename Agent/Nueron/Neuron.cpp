@@ -20,6 +20,29 @@ Neuron::Neuron(int weights_size) {
     bias = bias_config;
 }
 
+Neuron::Neuron(const Neuron& other) {
+    if (this != &other) {
+        weights = other.weights;
+        bias = other.bias;
+        learning_rate = other.learning_rate;
+        z = other.z;
+        a = other.a;
+        delta = other.delta;
+    }
+}
+
+Neuron& Neuron::operator=(const Neuron& other) {
+    if (this != &other) {
+        weights = other.weights;
+        bias = other.bias;
+        learning_rate = other.learning_rate;
+        z = other.z;
+        a = other.a;
+        delta = other.delta;
+    }
+    return *this;
+}
+
 void Neuron::set_weights() {
     weights.clear();
 }

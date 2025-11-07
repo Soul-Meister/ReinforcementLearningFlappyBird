@@ -23,6 +23,26 @@ Network::Network() {
 
 }
 
+Network::Network(const Network& other) {
+    if (this != &other) {
+        layers = other.layers;
+        last_input = other.last_input; // include if you have this in the class
+    }
+}
+
+Network& Network::operator=(const Network& other) {
+    if (this != &other) {
+        layers = other.layers;
+        last_input = other.last_input; // include if applicable
+    }
+    return *this;
+}
+
+void Network::copy_from(const Network& other) {
+    layers = other.layers;
+    last_input = other.last_input; // optional, same reasoning
+}
+
 void Network::init() {//HE init for leakyReLU
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -92,7 +112,7 @@ void Network::backward(const vector<float>& target) {
     for (size_t j = 0; j < outputLayer.get_layer_size(); ++j) {
         Neuron& neuron = outputLayer.get_neurons()[j];
         float error = neuron.a - target[j];
-        neuron.delta = error * act.derivative(neuron.z);
+        neuron.delta = error;
     }
 
     // Hidden layers
