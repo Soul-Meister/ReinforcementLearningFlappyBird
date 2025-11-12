@@ -9,7 +9,10 @@
 #include <vector>
 
 
-
+class Config {
+    public:
+    Config();
+};
 
 extern int game_mode;
 

@@ -3,7 +3,7 @@
 //
 
 #include "LeakyReLU.h"
-#include "../../main/config.h"
+#include "../../main/Config.h"
 
 LeakyReLU::LeakyReLU() {
     alpha = alpha_config;

@@ -9,7 +9,7 @@
 #include "../Bird/Bird.h"
 #include "../Wall/Wall.h"
 #include "../Agent/Policies/EpsilonGreedyPolicy.h"
-#include "config.h"
+#include "Config.h"
 
 #include <random>
 #include <chrono>
@@ -17,35 +17,7 @@
 
 using namespace std;
 
-int game_mode;
 
-//game globals
-int window_height_config;
-int window_width_config;
-int target_fps_config;
-int gap_width_config;
-int wall_speed_config;
-
-//agent globals
-int replay_buffer_size_config;
-int replay_buffer_sample_size_config;
-double learning_rate_config;
-float bias_config;
-
-//policy
-float min_epsilon_config;
-float policy_decay_config;
-
-//discount factor
-float gamma_config;
-
-//network
-vector<int> network_config;
-
-//activation function
-
-bool render_config;
-float alpha_config;
 
 struct Transition {
     std::vector<float> state;
@@ -60,45 +32,13 @@ struct Transition {
 
 
 int main() {
-
-    //0 for human player
-    //1 for train model on these configurations - HEADED
-    //2 for train model on these configurations - HEADLESS
-    //3 for loading a model form json, then running
-    game_mode = 1;
-
-    //declare game globals
-    window_height_config = 1200;
-    window_width_config = 1600;
-    target_fps_config = 120;
-    gap_width_config = 200;
-    wall_speed_config = 1;
-
-    //declare agent globals
-    replay_buffer_size_config = 100000;
-    replay_buffer_sample_size_config = 32; //64-128
-    learning_rate_config = 0.00005;
-    bias_config = 0.0f;
-
-    //policy
-    min_epsilon_config = 0.000;
-    policy_decay_config = 0.0000001;
-
-    //discount factor
-    gamma_config = 0.98f;
-
-    //activation function
-    alpha_config = 0.01f;
-
-    //network variables -- {inputs, hidden, hidden ... hidden, output}
-    network_config = {64, 64, 2};
+    const auto config = Config();//run config, set globals
 
     //wall creation
     int wall_delay_frames = 500;
     int last_wall_spawn_frames = wall_delay_frames;//will go to 0 then increment up; this is to immediately spawn one
 
-    //render or not
-    render_config = true;
+
 
 
     vector<Wall> walls;
@@ -238,7 +178,7 @@ int main() {
                     if (event.type == SDL_QUIT) {
                         running = false;
                     }
-                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE) {
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE) {//yes, I kept this for the network. Its fun to mess w the bird every so often
                         //check if space is pressed
                         has_clicked = true;
                         bird.y_vel = -5; //set bird velocity
@@ -252,12 +192,16 @@ int main() {
                         last_wall_spawn_frames = wall_delay_frames;
                     }
                     if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_s) {
-                        //speed toggle
+                        //speed toggle -- removes FPS cap
                         speed_toggle = !speed_toggle;
                     }
-                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_h) {//speed toggle
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_h) {//render toggle -- reduced gpu overhead, faster network training if off
                         render_config = !render_config;
                     }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_m) {//speed toggle
+
+                    }
+
                 }
 
 
@@ -351,7 +295,7 @@ int main() {
 
 
                         {
-                            network.backward(target);  // only one thread at a time
+                            network.backward(target);
                         }
                         train_steps++;
                     }

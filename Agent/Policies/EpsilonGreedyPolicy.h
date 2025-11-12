@@ -5,7 +5,7 @@
 #ifndef FLAPPYBIRD_EPSILONGREEDYPOLICY_H
 #define FLAPPYBIRD_EPSILONGREEDYPOLICY_H
 
-#include "../../main/config.h"
+#include "../../main/Config.h"
 
 
 class EpsilonGreedyPolicy {

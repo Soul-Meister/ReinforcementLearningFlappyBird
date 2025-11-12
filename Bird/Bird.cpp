@@ -5,7 +5,7 @@
 #include "Bird.h"
 #include <iostream>
 
-#include "../main/config.h"
+#include "../main/Config.h"
 
 using namespace std;
 

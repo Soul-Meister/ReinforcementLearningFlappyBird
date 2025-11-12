@@ -3,7 +3,7 @@
 //
 
 #include "Neuron.h"
-#include "../../main/config.h"
+#include "../../main/Config.h"
 
 
 #include <vector>

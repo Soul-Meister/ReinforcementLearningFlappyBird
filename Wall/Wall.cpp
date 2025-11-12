@@ -3,7 +3,7 @@
 //
 
 #include "Wall.h"
-#include "../main/config.h"
+#include "../main/Config.h"
 
 #include <chrono>
 #include <random>

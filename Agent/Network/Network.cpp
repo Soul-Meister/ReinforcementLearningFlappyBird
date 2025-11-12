@@ -9,7 +9,7 @@
 
 #include "../Layer/Layer.h"
 #include <vector>
-#include "../../main/config.h"
+#include "../../main/Config.h"
 #include "../ActivationFunctions/LeakyReLU.h"
 
 using namespace std;
