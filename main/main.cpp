@@ -5,7 +5,8 @@
 
 
 #include "../Agent/Network/Network.h"
-#include "../game/game.h"
+#include "../Agent/ReplayBuffer/ReplayBuffer.h"
+#include "../game/GameEnv.h"
 #include "../Bird/Bird.h"
 #include "../Wall/Wall.h"
 #include "../Agent/Policies/EpsilonGreedyPolicy.h"
@@ -18,7 +19,6 @@
 using namespace std;
 
 
-
 struct Transition {
     std::vector<float> state;
     int action;
@@ -28,48 +28,39 @@ struct Transition {
 };
 
 
-
-
-
 int main() {
-    const auto config = Config();//run config, set globals
-
-    //wall creation
-    int wall_delay_frames = 500;
-    int last_wall_spawn_frames = wall_delay_frames;//will go to 0 then increment up; this is to immediately spawn one
-
-
+    const auto config = Config(); //run config, set globals
 
 
     vector<Wall> walls;
-    Bird bird = Bird();
-    vector<float> game_state(7); //bird_x, bird_y, bird_y_vel, next_wall_x, next_next_wall_x, next_wall_y, next_next_wall_y
-    vector<Transition> replay_buffer;
+    //Bird bird = Bird();
+    vector<float> game_state(7);
+    //bird_x, bird_y, bird_y_vel, next_wall_x, next_next_wall_x, next_wall_y, next_next_wall_y
 
-    Uint32 frameDelay_ms = 1000/target_fps_config;
+    Uint32 frameDelay_ms = 1000 / target_fps_config;
 
 
     bool running = true;
     SDL_Event event;
-    bool speed_toggle  = false;
+    bool speed_toggle = false;
     bool has_clicked = true;
-    SDL_Window *window = SDL_CreateWindow("SDL2", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, window_width_config, window_height_config, SDL_WINDOW_SHOWN);
+    SDL_Window *window = SDL_CreateWindow("SDL2", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, window_width_config,
+                                          window_height_config, SDL_WINDOW_SHOWN);
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
     // create RNG engine (seeded by time)
     static std::mt19937 rng(std::chrono::steady_clock::now().time_since_epoch().count());
     std::uniform_real_distribution<float> real_dist(0.0f, 1.0f);
-    std::uniform_int_distribution<int> action_dist(0, 75);//1 in 75 chance for the epsilon choice to actually be jump; makes it better for learning rates
-
-
-
-
+    std::uniform_int_distribution<int> action_dist(0, 75);
+    //1 in 75 chance for the epsilon choice to actually be jump; makes it better for learning rates
 
 
     switch (game_mode) {
-        case 0: {//human player
+        case 0: {
+            //human player
+            GameEnv game = GameEnv();
             if (SDL_Init(SDL_INIT_VIDEO)) {
-                cout << "SDL_Init Error: " << SDL_GetError() << endl;//the now very not epic window failed to open
+                cout << "SDL_Init Error: " << SDL_GetError() << endl; //the now very not epic window failed to open
             }
 
             if (!window) {
@@ -79,81 +70,85 @@ int main() {
             }
 
 
+            while (running) {
+                //main update loop
+                Uint32 startTime = SDL_GetTicks();
 
-
-                    while (running) {//main update loop
-            Uint32 startTime = SDL_GetTicks();
-
-            if (has_clicked) {
-                last_wall_spawn_frames++;
-            }
-
-
-            while (SDL_PollEvent(&event)) {
-                if (event.type == SDL_QUIT) {//quit
-                    running = false;
-                }
-                if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE) {//check if jumps
-                    has_clicked = true;
-                    bird.y_vel = -5;//set bird velocity
-                }
-                if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_r) {//reset function
-                    has_clicked = false;
-                    walls.clear();
-                    bird.x =200;
-                    bird.y = window_height_config/2;
-                    bird.y_vel = 0;
-                    last_wall_spawn_frames = wall_delay_frames;
-                }
-                if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_s) {//speed toggle
-                    speed_toggle = !speed_toggle;
+                if (has_clicked) {
+                    game.last_wall_spawn_frames++;
                 }
 
-            }
+
+                while (SDL_PollEvent(&event)) {
+                    if (event.type == SDL_QUIT) {
+                        //quit
+                        running = false;
+                    }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE) {
+                        //check if jumps
+                        has_clicked = true;
+                        game.bird.y_vel = -5; //set bird velocity
+                    }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_r) {
+                        //reset function
+                        has_clicked = false;
+                        walls.clear();
+                        game.bird.x = 200;
+                        game.bird.y = window_height_config / 2;
+                        game.bird.y_vel = 0;
+                        game.last_wall_spawn_frames = game.wall_delay_frames;
+                    }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_s) {
+                        //speed toggle
+                        speed_toggle = !speed_toggle;
+                    }
+                }
 
 
-            Uint32 frameTime = SDL_GetTicks() - startTime; // Calculate time taken for frame
-            if (last_wall_spawn_frames >= wall_delay_frames) {
-                last_wall_spawn_frames = 0;
-                walls.emplace_back(Wall());
-            }
+                Uint32 frameTime = SDL_GetTicks() - startTime; // Calculate time taken for frame
+                if (game.last_wall_spawn_frames >= game.wall_delay_frames) {
+                    game.last_wall_spawn_frames = 0;
+                    walls.emplace_back(Wall());
+                }
 
-            if (!speed_toggle) {
-                // Cap FPS
-                if (frameTime < frameDelay_ms) {
-                    SDL_Delay(frameDelay_ms - frameTime);
+                if (!speed_toggle) {
+                    // Cap FPS
+                    if (frameTime < frameDelay_ms) {
+                        SDL_Delay(frameDelay_ms - frameTime);
+                    }
+                }
+
+
+                if (!game.check_collision(&game.bird, &walls)) {
+                    //check collisions, if not
+                    game.update(renderer, &game.bird, has_clicked, &walls, render_config); //main update function
                 }
             }
-
-
-           if (!check_collision(&bird, &walls)) {//check collisions, if not
-               update(renderer, &bird, has_clicked, &walls, render_config);//main update function
-            }
-
         }
 
+        break;
+        case 1: {
+            //train model headed by default; option to enable/disable graphics -- RENDERING ONLY OCCURS FOR TRAINING THREAD; all multithreaded envs remain unrendered
+
+            vector<GameEnv> envs = vector<GameEnv>(0);//create vector for game envs
+            envs.reserve(threads-1);//reserve memory space for each env
+            cout <<"initializing..." << endl;//very epic debug
+            for (int i = 0; i < threads-1; i++) {//for loop to create environments
+                envs.emplace_back(GameEnv());
+            }
+
+            ReplayBuffer replayBuffer = ReplayBuffer(replay_buffer_size_config);
 
 
-
-
-        }
-
-            break;
-        case 1: { //train model headed
-            double episodes = 0;
-            double flaps = 0;
-            double iterations = 0;
-            int max_score = 0;
-            size_t frame_count = 0;
             size_t train_steps = 0;
-            const size_t TARGET_UPDATE_INTERVAL = 1000;
+            const size_t target_net_update_interval = 1000;
 
             //Model Reqs init
             Network network = Network();
+            network.init();//initilize network params
+            Network target_network = network;//deep copy of network to start for target net
+
             auto policy = EpsilonGreedyPolicy(policy_decay_config, min_epsilon_config);
-            network.init();
-            Network target_network = network;
-            int target_update_interval = 2000;
 
 
             if (SDL_Init(SDL_INIT_VIDEO)) {
@@ -168,9 +163,9 @@ int main() {
             while (running) {
                 //main update loop
                 Uint32 startTime = SDL_GetTicks();
-
-                if (has_clicked) {
-                    last_wall_spawn_frames++;
+                for (size_t i = 0; i < envs.size(); i++) {
+                    GameEnv &env = envs[i];
+                    env.update(renderer, has_clicked, (render_config && i==1));
                 }
 
 
@@ -178,36 +173,25 @@ int main() {
                     if (event.type == SDL_QUIT) {
                         running = false;
                     }
-                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_SPACE) {//yes, I kept this for the network. Its fun to mess w the bird every so often
-                        //check if space is pressed
-                        has_clicked = true;
-                        bird.y_vel = -5; //set bird velocity
-                    }
-                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_r) {
-                        //reset function
-                        walls.clear();
-                        bird.x = 200;
-                        bird.y = window_height_config / 2;
-                        bird.y_vel = 0;
-                        last_wall_spawn_frames = wall_delay_frames;
-                    }
                     if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_s) {
-                        //speed toggle -- removes FPS cap
+                        //speed toggle
+                        // -- removes FPS cap
                         speed_toggle = !speed_toggle;
                     }
-                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_h) {//render toggle -- reduced gpu overhead, faster network training if off
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_h) {
+                        //render toggle -- reduced gpu overhead, faster network training if off
                         render_config = !render_config;
                     }
-                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_m) {//speed toggle
-
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_m) {
+                        //save model
+                        network.save_model();
                     }
-
                 }
 
 
                 Uint32 frameTime = SDL_GetTicks() - startTime; // Calculate time taken for frame
-                if (last_wall_spawn_frames >= wall_delay_frames) {
-                    last_wall_spawn_frames = 0;
+                if (env.last_wall_spawn_frames >= env.wall_delay_frames) {
+                    env.last_wall_spawn_frames = 0;
                     walls.emplace_back(Wall());
                 }
 
@@ -219,45 +203,43 @@ int main() {
                 }
 
 
-
                 //initial pass -- prepare data
                 auto initial_game_state = game_state;
                 auto q_values = network.forward(game_state); //assign result to memory to avoid multiple calls
 
                 // ε-greedy with unbiased greedy tie
                 int greedy =
-                    (q_values[0] > q_values[1]) ? 0 :
-                    (q_values[1] > q_values[0]) ? 1 :
-                    action_dist(rng); // random on tie
+                        (q_values[0] > q_values[1]) ? 0 : (q_values[1] > q_values[0]) ? 1 : action_dist(rng);
+                // random on tie
 
                 int action = (real_dist(rng) < policy.getEpsilon()) ? action_dist(rng) == 1 ? 1 : 0 : greedy;
 
                 if (action == 1) {
-                    bird.y_vel = -5;
-                    flaps++;
+                    env.bird.y_vel = -5;
+                    env.flaps++;
                 }
-                iterations++;
+                env.iterations++;
 
                 //update the game with model choice
-                update(renderer, &bird, has_clicked, &walls, render_config);
+                env.update(renderer, &env.bird, has_clicked, &walls, render_config);
 
                 //get post model choice data
-                game_state = get_game_state(&bird, &walls); //retrieve game state
+                game_state = env.get_game_state(&env.bird, &walls); //retrieve game state
 
-                double reward = get_reward(game_state, &bird, check_collision(&bird, &walls));
+                double reward = env.get_reward(game_state, &env.bird, env.check_collision(&env.bird, &walls));
                 if (action == 1) {
                     reward = -0.01;
                 }
                 //cout << flush;
-                if (bird.score > max_score) {
-                    max_score = bird.score;
+                if (env.bird.score > env.max_score) {
+                    env.max_score = env.bird.score;
                 }
-                if (static_cast<int>(iterations) % 100 == 0) {
-                    cout << "Reward: " << reward  <<  "  Epsilon: " << policy.getEpsilon() << " Episodes: " << episodes << " Flap Rate: " << flaps/iterations <<  " Max Score: " << max_score << "\n";
+                if (static_cast<int>(env.iterations) % 100 == 0) {
+                    cout << "Reward: " << reward << "  Epsilon: " << policy.getEpsilon() << " Episodes: " << env.
+                            episodes << " Flap Rate: " << env.flaps / env.iterations << " Max Score: " << env.max_score <<
+                            "\n";
                     cout << q_values[0] << " " << q_values[1] << " \n";
                 }
-
-
 
 
                 //save data to a replay buffer
@@ -266,7 +248,7 @@ int main() {
                     action,
                     reward,
                     game_state,
-                    check_collision(&bird, &walls) //enter the "end of episode" function
+                    env.check_collision(&env.bird, &walls) //enter the "end of episode" function
                 });
 
                 // Training phase (sample batch from replay buffer)
@@ -275,7 +257,7 @@ int main() {
                     std::uniform_int_distribution<size_t> idx_dist(0, replay_buffer.size() - 1);
 
                     for (int n = 0; n < replay_buffer_sample_size_config; ++n) {
-                        const Transition& t = replay_buffer[idx_dist(rng)];
+                        const Transition &t = replay_buffer[idx_dist(rng)];
 
                         // Double DQN target
                         std::vector<float> q_next_online = network.forward(t.next_state);
@@ -301,13 +283,12 @@ int main() {
                     }
 
                     // Periodic hard update of target net
-                    if (train_steps % TARGET_UPDATE_INTERVAL == 0) {
+                    if (train_steps % target_net_update_interval == 0) {
                         target_network = network;
                     }
 
                     policy.decay();
                 }
-
 
 
                 //make sure replay buffer remains within buffer size limit
@@ -317,25 +298,23 @@ int main() {
                 }
 
                 //reset the bird if it has crashed
-                if (check_collision(&bird, &walls)) {
+                if (env.check_collision(&env.bird, &walls)) {
                     //reset functionss
                     walls.clear();
-                    bird.x = 200;
-                    bird.y = window_height_config / 2;
-                    bird.y_vel = 0;
-                    last_wall_spawn_frames = wall_delay_frames;
-                    episodes++;
-                    bird.score = 0;
+                    env.bird.x = 200;
+                    env.bird.y = window_height_config / 2;
+                    env.bird.y_vel = 0;
+                    env.last_wall_spawn_frames = env.wall_delay_frames;
+                    env.episodes++;
+                    env.bird.score = 0;
                 }
-
-
-
             }
         }
 
-            break;
+        break;
         case 2:
-            //train model headless
+            //train model, multithreaded
+
             break;
         case 3:
             //load model

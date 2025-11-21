@@ -1,43 +1,53 @@
-#include "game.h"
+#include "GameEnv.h"
 
 #include <algorithm>
 
-#include "../main/config.h"
+#include "../main/Config.h"
 #include <SDL2/SDL.h>
 
 #include <iostream>
 
 
-float normalize(float value, float min, float max) {
+GameEnv::GameEnv(){
+    flaps = 0;
+    episodes = 0;
+    iterations = 0;
+    max_score = 0;
+    wall_delay_frames = 500;
+    last_wall_spawn_frames = wall_delay_frames;//will go to 0 then increment up; this is to immediately spawn one
+}
+
+float GameEnv::normalize(float value, float min, float max) {
     if (max == min) return 0.0f;
     return 2.0f * ((value - min) / (max - min)) - 1.0f;
 }
 
 
 
-void update(SDL_Renderer *renderer, Bird* pbird, bool has_clicked, vector<Wall>* pwalls, bool render_) {
-    if (has_clicked) {//update per click
-        pbird->update();//update bird
+void GameEnv::update(SDL_Renderer *renderer, bool has_clicked, bool render_) {
+    if (has_clicked) {//update after clicked; only used in gamemode 0 for human player, otherwise its always true
+        bird.update();//update bird position
 
-        for (int i = 0; i < static_cast<int>(pwalls->size()); i++) {//updater for walls
-            pwalls->at(i).x_pos -= wall_speed_config;//update x position of walls relative to speed
-            if (pwalls->at(i).x_pos+pwalls->at(i).width < 0) {
-                  pwalls->erase(pwalls->begin() + i);
+        last_wall_spawn_frames++;
+        for (int i = 0; i < static_cast<int>(walls.size()); i++) {//updater for walls
+            walls.at(i).x_pos -= wall_speed_config;//update x position of walls relative to speed set in config
+            if (walls.at(i).x_pos+walls.at(i).width < 0) {
+                  walls.erase(walls.begin() + i);
             }
-            if (pwalls->at(i).x_pos+pwalls->at(i).width < pbird->x && !pwalls->at(i).is_scored) {
-                pwalls->at(i).is_scored = true;
-                pbird->score++;
-                pbird->unchecked_score = true;
-                cout << "Score: " << pbird->score << endl;
+            if (walls.at(i).x_pos+walls.at(i).width < bird.x && !walls.at(i).is_scored) {
+                walls.at(i).is_scored = true;
+                bird.score++;
+                bird.unchecked_score = true;
+                cout << "Score: " << bird.score << endl;
             }
         }
     }
     if (render_) {
-        render(renderer, pbird, pwalls);
+        render(renderer, &bird, &walls);
     }
 }
 
-void render(SDL_Renderer *renderer, Bird* pbird, vector<Wall>* pwalls) {
+void GameEnv::render(SDL_Renderer *renderer, Bird* pbird, vector<Wall>* pwalls) {
 
     //Clear the window bro
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -65,7 +75,7 @@ void render(SDL_Renderer *renderer, Bird* pbird, vector<Wall>* pwalls) {
     SDL_RenderPresent(renderer);
 }
 
-bool check_collision(Bird* pbird, vector<Wall>* pwalls) {
+bool GameEnv::check_collision(Bird* pbird, vector<Wall>* pwalls) {
     // top/bottom
     if (pbird->y < 0) return true;
     if (pbird->y + pbird->height > window_height_config) return true;
@@ -82,7 +92,7 @@ bool check_collision(Bird* pbird, vector<Wall>* pwalls) {
 }
 
 
-vector<float> get_game_state(Bird* pBird, vector<Wall>* pwalls) {
+vector<float> GameEnv::get_game_state(Bird* pBird, vector<Wall>* pwalls) {
     //bird_x, bird_y, bird_y_vel, next_wall_x, next_next_wall_x, next_wall_y,
 
 
@@ -125,17 +135,18 @@ vector<float> get_game_state(Bird* pBird, vector<Wall>* pwalls) {
 
 //bird_x, bird_y, bird_y_vel, next_wall_x, next_next_wall_x, next_wall_y, next_next_wall_y
 
-double get_reward(const std::vector<float>& state, Bird* bird, bool done) {
+double GameEnv::get_reward(const std::vector<float>& state, Bird* bird, bool done) {
     // ---- tunable weights (feel free to tweak) ----
-    constexpr double ALIVE_BONUS         = 0.05;  // dense survival reward
-    constexpr double ALIGN_WEIGHT        = 3;  // vertical alignment with gap
-    constexpr double VEL_ABS_WEIGHT      = 0.15;  // penalty for big |velocity|
-    constexpr double VEL_UP_WEIGHT       = 0.075;  // extra penalty for upward motion
+    constexpr double ALIVE_BONUS         = 0.05;  // dense survival reward -- if not actively dying, reward
+    constexpr double ALIGN_WEIGHT        = 3;  // vertical alignment with gap -- reward heavily for being aligne with the next pipe
+    constexpr double VEL_ABS_WEIGHT      = 0.0;  // penalty for big |velocity|
+    constexpr double VEL_UP_WEIGHT       = 0.00;  // extra penalty for upward motion -- attempt at detering from frequent flapping, remedied by simply making exploration a 1/75 to actualy jump
     constexpr double APPROACH_WALL_WEIGHT= 0.00;  // reward for being close to next wall
-    constexpr double EDGE_PENALTY_WEIGHT = 0.6;  // penalty near top/bottom edges
-    constexpr double PIPE_REWARD         = 30.0;  // reward for passing a pipe
-    constexpr double DEATH_PENALTY       = 50.0;  // penalty on crash
-    constexpr double EDGE_MARGIN_PX      = 120.0; // proximity width for edge penalty
+    constexpr double PIPE_REWARD         = 20.0;  // reward for passing a pipe
+    constexpr double DEATH_PENALTY       = 20.0;  // penalty on crash
+    constexpr double EDGE_MARGIN_PX      = 0.0; // proximity width for edge penalty
+    constexpr double EDGE_PENALTY_WEIGHT = 0.0;  // penalty near top/bottom edges -- was 0.6; removed because found it to be more damaging than beneficial
+
 
     double reward = 0.0;
 

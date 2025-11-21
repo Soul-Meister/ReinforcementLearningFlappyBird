@@ -2,6 +2,7 @@
 #include "Config.h"
 
 int game_mode;
+int threads;
 int window_height_config;
 int window_width_config;
 int target_fps_config;
@@ -27,6 +28,8 @@ Config::Config() {
     //3 for loading a model form json, then running
     game_mode = 1;
 
+    threads = 10;
+
     //declare game globals
     window_height_config = 1200;
     window_width_config = 1600;
@@ -41,8 +44,8 @@ Config::Config() {
     bias_config = 0.0f;
 
     //policy
-    min_epsilon_config = 0.000;
-    policy_decay_config = 0.00001;
+    min_epsilon_config = 0.00001;
+    policy_decay_config = 0.000003;
 
     //discount factor
     gamma_config = 0.985f;
@@ -51,7 +54,7 @@ Config::Config() {
     alpha_config = 0.01f;
 
     //network variables -- {hidden, hidden ... hidden, output} -- layer size
-    network_config = {32, 32, 2};
+    network_config = {128, 128, 2};
 
     //render or not
     render_config = true;

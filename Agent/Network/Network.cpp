@@ -30,6 +30,11 @@ Network::Network(const Network& other) {
     }
 }
 
+void Network::save_model() {
+
+}
+
+
 Network& Network::operator=(const Network& other) {
     if (this != &other) {
         layers = other.layers;

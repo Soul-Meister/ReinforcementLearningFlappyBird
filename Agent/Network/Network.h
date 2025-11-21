@@ -16,6 +16,8 @@ private:
 public:
     Network();
 
+    void save_model();
+
     Network(const Network &other);
 
     Network &operator=(const Network &other);
