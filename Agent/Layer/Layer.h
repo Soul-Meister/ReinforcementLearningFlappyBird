@@ -19,6 +19,10 @@ public:
 
     Layer(const Layer &other);
 
+    Layer();
+
+    void add_neuron(Neuron neuron);
+
     Layer &operator=(const Layer &other);
 
     vector<Neuron>& get_neurons();

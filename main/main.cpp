@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <atomic>
 #include <iostream>
 #include <SDL2/SDL.h>
 #include <vector>
@@ -14,19 +15,13 @@
 
 #include <random>
 #include <chrono>
+#include <thread>
 
 
 using namespace std;
 
 
-struct Transition {
-    std::vector<float> state;
-    int action;
-    double reward;
-    std::vector<float> next_state;
-    bool done;
-};
-
+std::mutex mtx;
 
 int main() {
     const auto config = Config(); //run config, set globals
@@ -40,28 +35,30 @@ int main() {
     Uint32 frameDelay_ms = 1000 / target_fps_config;
 
 
-    bool running = true;
+    std::atomic<bool> running = true;
     SDL_Event event;
     bool speed_toggle = false;
     bool has_clicked = true;
+
+    int train_steps = 0;
+    bool tick_decay = true;
+
+    if (SDL_Init(SDL_INIT_VIDEO)) {
+        cout << "SDL_Init Error: " << SDL_GetError() << endl; //the now very not epic window failed to open
+    }
     SDL_Window *window = SDL_CreateWindow("SDL2", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, window_width_config,
                                           window_height_config, SDL_WINDOW_SHOWN);
     SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
     // create RNG engine (seeded by time)
     static std::mt19937 rng(std::chrono::steady_clock::now().time_since_epoch().count());
-    std::uniform_real_distribution<float> real_dist(0.0f, 1.0f);
-    std::uniform_int_distribution<int> action_dist(0, 75);
-    //1 in 75 chance for the epsilon choice to actually be jump; makes it better for learning rates
 
 
     switch (game_mode) {
         case 0: {
             //human player
-            GameEnv game = GameEnv();
-            if (SDL_Init(SDL_INIT_VIDEO)) {
-                cout << "SDL_Init Error: " << SDL_GetError() << endl; //the now very not epic window failed to open
-            }
+            GameEnv game = GameEnv(1);
+
 
             if (!window) {
                 cout << "SDL_CreateWindow Error: " << SDL_GetError() << endl;
@@ -111,61 +108,152 @@ int main() {
                     walls.emplace_back(Wall());
                 }
 
-                if (!speed_toggle) {
-                    // Cap FPS
-                    if (frameTime < frameDelay_ms) {
-                        SDL_Delay(frameDelay_ms - frameTime);
-                    }
-                }
-
 
                 if (!game.check_collision(&game.bird, &walls)) {
                     //check collisions, if not
-                    game.update(renderer, &game.bird, has_clicked, &walls, render_config); //main update function
+                    game.update(renderer, has_clicked, render_config); //main update function
                 }
             }
         }
 
         break;
+
         case 1: {
+            //very epic multithreaded training
+            int max_score = 0;
+
+
             //train model headed by default; option to enable/disable graphics -- RENDERING ONLY OCCURS FOR TRAINING THREAD; all multithreaded envs remain unrendered
+            cout << "Starting...\n";
+            vector<GameEnv> envs = vector<GameEnv>(0, 0); //create vector for game envs
 
-            vector<GameEnv> envs = vector<GameEnv>(0);//create vector for game envs
-            envs.reserve(threads-1);//reserve memory space for each env
-            cout <<"initializing..." << endl;//very epic debug
-            for (int i = 0; i < threads-1; i++) {//for loop to create environments
-                envs.emplace_back(GameEnv());
+            cout << "Reserving memory...";
+            envs.reserve(threads_config - 1); //reserve memory space for each env
+            cout << "OK\n";
+
+            cout << "Creating Environments...";
+            for (int i = 0; i < threads_config - 1; i++) {
+                //for loop to create environments
+                envs.emplace_back(GameEnv(i));
             }
+            cout << "OK\n";
 
-            ReplayBuffer replayBuffer = ReplayBuffer(replay_buffer_size_config);
-
+            cout << "Creating Replay Buffer...";
+            ReplayBuffer replay_buffer = ReplayBuffer(replay_buffer_size_config);
+            cout << "OK\n";
 
             size_t train_steps = 0;
-            const size_t target_net_update_interval = 1000;
+            const size_t target_net_update_interval = 50000;
 
             //Model Reqs init
-            Network network = Network();
-            network.init();//initilize network params
-            Network target_network = network;//deep copy of network to start for target net
+            cout << "Creating Network...";
+            Network network = Network(0);
+            cout << "OK\n";
 
+            cout << "Initializing Network...";
+            network.init(); //initilize network params
+            cout << "OK\n";
+
+            cout << "Creating/Initializing Target Network...";
+            Network target_network = network; //deep copy of network to start for target net
+            cout << "OK\n";
+
+            cout << "initializing Policy...";
             auto policy = EpsilonGreedyPolicy(policy_decay_config, min_epsilon_config);
+            cout << "OK\n";
 
 
             if (SDL_Init(SDL_INIT_VIDEO)) {
                 cout << "SDL_Init Error: " << SDL_GetError() << endl; //the now very not epic window failed to open
+            } else {
+                cout << "SDL_Init...OK\n";
             }
 
             if (!window) {
                 cout << "SDL_CreateWindow Error: " << SDL_GetError() << endl;
                 SDL_Quit();
                 return 1;
+            } else {
+                cout << "SDL_CreateWindow...OK\n";
             }
+
+
+            const Uint32 worker_env_fps = 120;
+            const Uint32 worker_delay = 1000 / worker_env_fps;
+
+
+            vector<std::thread> worker_threads;
+            for (int i = 0; i < threads_config - 1; i++) {
+                worker_threads.emplace_back([&, i]() {
+                    auto &env = envs[i];
+
+
+                    Uint32 last_step_time = SDL_GetTicks();
+
+                    while (running) {
+                        if (speed_toggle) {
+                            //env.update(has_clicked, policy, &network, &replay_buffer, (false));
+
+                            Uint32 now = SDL_GetTicks();
+                            if (now - last_step_time >= worker_delay / 2) {
+                                env.update(has_clicked, policy, &network, &replay_buffer, false);
+                                last_step_time = now;
+                            } else {
+                                // Don't burn CPU; yield thread for a tiny bit
+                                // std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                            }
+                        } else {
+                            // SLOW MODE — rate-limited
+                            Uint32 now = SDL_GetTicks();
+                            if (now - last_step_time >= worker_delay) {
+                                env.update(has_clicked, policy, &network, &replay_buffer, false);
+                                last_step_time = now;
+                            } else {
+                                // Don't burn CPU; yield thread for a tiny bit
+                                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                            }
+                        }
+
+
+                        if (env.check_collision(&env.bird, &env.walls)) {
+                            //reset functionss
+                            env.walls.clear();
+                            env.bird.x = 200;
+                            env.bird.y = window_height_config / 2;
+                            env.bird.y_vel = 0;
+                            env.last_wall_spawn_frames = env.wall_delay_frames;
+                            env.episodes++;
+                            env.bird.score = 0;
+                        }
+                    }
+                });
+            }
+
+
             while (running) {
                 //main update loop
                 Uint32 startTime = SDL_GetTicks();
-                for (size_t i = 0; i < envs.size(); i++) {
-                    GameEnv &env = envs[i];
-                    env.update(renderer, has_clicked, (render_config && i==1));
+                Uint32 frameDelay_ms = 1000 / target_fps_config;
+
+
+                render(renderer, &envs);
+                //render(renderer, &envs[0].bird, &envs[0].walls); single env render
+
+                for (GameEnv &env: envs) {
+                    if (env.max_score > max_score) {
+                        max_score = env.max_score;
+                    }
+                }
+
+
+                if (envs[0].iterations % 20 == 0 && envs[0].iterations > 0) {
+                    auto forward = network.forward(envs[0].get_game_state());
+                    double flap_rate = (envs[0].iterations > 0)
+                                           ? double(envs[0].flaps) / double(envs[0].iterations)
+                                           : 0.0;
+                    cout << "Epsilon: " << policy.getEpsilon() << "  Max Score: " << max_score << "  Flap Rate: " <<
+                            flap_rate << "  Steps: " << envs[0].iterations << "  qValue[0]: " << forward[0] <<
+                            " qValue[1]: " << forward[1] << endl;
                 }
 
 
@@ -179,21 +267,21 @@ int main() {
                         speed_toggle = !speed_toggle;
                     }
                     if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_h) {
-                        //render toggle -- reduced gpu overhead, faster network training if off
+                        //render toggle -- reduced gpu overhead, faster network training if off -- changed with multithreading. I cant tell a difference in training time with/without this, but Ill keep it just in case
                         render_config = !render_config;
                     }
                     if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_m) {
                         //save model
-                        network.save_model();
+                        //running = false; //temp for debug
+                        network.save_model(&network); //still need to make this lol
+                    }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_p) {
+                        policy.epsilon = policy.epsilon == min_epsilon_config ? 0 : min_epsilon_config;
+                        tick_decay = !tick_decay;
                     }
                 }
 
-
                 Uint32 frameTime = SDL_GetTicks() - startTime; // Calculate time taken for frame
-                if (env.last_wall_spawn_frames >= env.wall_delay_frames) {
-                    env.last_wall_spawn_frames = 0;
-                    walls.emplace_back(Wall());
-                }
 
                 if (!speed_toggle) {
                     // Cap FPS
@@ -203,129 +291,577 @@ int main() {
                 }
 
 
-                //initial pass -- prepare data
-                auto initial_game_state = game_state;
-                auto q_values = network.forward(game_state); //assign result to memory to avoid multiple calls
+                // Training phase (sample batch from replay buffer)
 
-                // ε-greedy with unbiased greedy tie
-                int greedy =
-                        (q_values[0] > q_values[1]) ? 0 : (q_values[1] > q_values[0]) ? 1 : action_dist(rng);
-                // random on tie
+                if (replay_buffer.size() > replay_buffer_sample_size_config) {
+                    if (++train_steps % 16 == 0) {
+                        auto batch = replay_buffer.sample_prioritized(replay_buffer_sample_size_config, rng);
+                        if (batch.empty()) {
+                            // something's off, but just skip safely
+                        } else {
+                            for (const auto &t: batch) {
+                                // Double DQN target
+                                std::vector<float> q_next_online = network.forward(t.next_state);
+                                int a_star = int(std::distance(
+                                    q_next_online.begin(),
+                                    std::max_element(q_next_online.begin(), q_next_online.end())
+                                ));
 
-                int action = (real_dist(rng) < policy.getEpsilon()) ? action_dist(rng) == 1 ? 1 : 0 : greedy;
+                                std::vector<float> q_next_target = target_network.forward(t.next_state);
+                                float next_val = q_next_target[a_star];
 
-                if (action == 1) {
-                    env.bird.y_vel = -5;
-                    env.flaps++;
+                                float bootstrap = t.done ? 0.0f : gamma_config * next_val;
+
+                                std::vector<float> q_cur = network.forward(t.state);
+                                std::vector<float> target = q_cur;
+                                target[t.action] = t.reward + bootstrap;
+
+                                network.backward(target);
+                                train_steps++;
+                            }
+                        }
+
+                        if (train_steps % target_net_update_interval == 0) {
+                            target_network = network;
+                        }
+                        if (tick_decay) {
+                            policy.decay();
+                        }
+                    }
                 }
-                env.iterations++;
-
-                //update the game with model choice
-                env.update(renderer, &env.bird, has_clicked, &walls, render_config);
-
-                //get post model choice data
-                game_state = env.get_game_state(&env.bird, &walls); //retrieve game state
-
-                double reward = env.get_reward(game_state, &env.bird, env.check_collision(&env.bird, &walls));
-                if (action == 1) {
-                    reward = -0.01;
-                }
-                //cout << flush;
-                if (env.bird.score > env.max_score) {
-                    env.max_score = env.bird.score;
-                }
-                if (static_cast<int>(env.iterations) % 100 == 0) {
-                    cout << "Reward: " << reward << "  Epsilon: " << policy.getEpsilon() << " Episodes: " << env.
-                            episodes << " Flap Rate: " << env.flaps / env.iterations << " Max Score: " << env.max_score <<
-                            "\n";
-                    cout << q_values[0] << " " << q_values[1] << " \n";
-                }
+            }
+        }
+        break;
+        case 2: {
+            //very epic multithreaded training
+            int max_score = 0;
 
 
-                //save data to a replay buffer
-                replay_buffer.emplace_back(Transition{
-                    initial_game_state,
-                    action,
-                    reward,
-                    game_state,
-                    env.check_collision(&env.bird, &walls) //enter the "end of episode" function
+            //train model headed by default; option to enable/disable graphics -- RENDERING ONLY OCCURS FOR TRAINING THREAD; all multithreaded envs remain unrendered
+            cout << "Starting...\n";
+            vector<GameEnv> envs = vector<GameEnv>(0, 0); //create vector for game envs
+
+            cout << "Reserving memory...";
+            envs.reserve(threads_config - 1); //reserve memory space for each env
+            cout << "OK\n";
+
+            cout << "Creating Environments...";
+            for (int i = 0; i < threads_config - 1; i++) {
+                //for loop to create environments
+                envs.emplace_back(GameEnv(i));
+            }
+            cout << "OK\n";
+
+            size_t train_steps = 0;
+            const size_t target_net_update_interval = 50000;
+
+            //Model Reqs init
+            cout << "Creating Network...";
+            Network network = Network(0);
+            cout << "OK\n";
+
+            cout << "Initializing Network...";
+            network = Network::load_model("models/Model_" + to_string(load_model_num) + ".txt");
+            //initilize network params
+            cout << "OK\n";
+
+            cout << "Creating/Initializing Target Network...";
+            Network target_network = network; //deep copy of network to start for target net
+            cout << "OK\n";
+
+
+            if (SDL_Init(SDL_INIT_VIDEO)) {
+                cout << "SDL_Init Error: " << SDL_GetError() << endl; //the now very not epic window failed to open
+            } else {
+                cout << "SDL_Init...OK\n";
+            }
+
+            if (!window) {
+                cout << "SDL_CreateWindow Error: " << SDL_GetError() << endl;
+                SDL_Quit();
+                return 1;
+            } else {
+                cout << "SDL_CreateWindow...OK\n";
+            }
+
+            const Uint32 worker_env_fps = 120;
+            const Uint32 worker_delay = 1000 / worker_env_fps;
+
+            vector<std::thread> worker_threads;
+            for (int i = 0; i < threads_config - 1; i++) {
+                worker_threads.emplace_back([&, i]() {
+                    auto &env = envs[i];
+
+
+                    Uint32 last_step_time = SDL_GetTicks();
+
+                    while (running) {
+                        if (speed_toggle) {
+                            //env.update(has_clicked, policy, &network, &replay_buffer, (false));
+
+                            Uint32 now = SDL_GetTicks();
+                            if (now - last_step_time >= worker_delay / 2) {
+                                env.update(has_clicked, &network, false);
+                                last_step_time = now;
+                            } else {
+                                // Don't burn CPU; yield thread for a tiny bit
+                                // std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                            }
+                        } else {
+                            // SLOW MODE — rate-limited
+                            Uint32 now = SDL_GetTicks();
+                            if (now - last_step_time >= worker_delay) {
+                                env.update(has_clicked, &network, false);
+                                last_step_time = now;
+                            } else {
+                                // Don't burn CPU; yield thread for a tiny bit
+                                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                            }
+                        }
+
+
+                        if (env.check_collision(&env.bird, &env.walls)) {
+                            //reset functionss
+                            env.walls.clear();
+                            env.bird.x = 200;
+                            env.bird.y = window_height_config / 2;
+                            env.bird.y_vel = 0;
+                            env.last_wall_spawn_frames = env.wall_delay_frames;
+                            env.episodes++;
+                            env.bird.score = 0;
+                        }
+                    }
                 });
+            }
+
+            while (running) {
+                //main update loop
+                Uint32 startTime = SDL_GetTicks();
+                Uint32 frameDelay_ms = 1000 / target_fps_config;
+
+
+                render(renderer, &envs);
+                //render(renderer, &envs[0].bird, &envs[0].walls); single env render
+
+                for (GameEnv &env: envs) {
+                    if (env.max_score > max_score) {
+                        max_score = env.max_score;
+                    }
+                }
+
+
+                if (envs[0].iterations % 20 == 0 && envs[0].iterations > 0) {
+                    auto forward = network.forward(envs[0].get_game_state());
+                    double flap_rate = (envs[0].iterations > 0)
+                                           ? double(envs[0].flaps) / double(envs[0].iterations)
+                                           : 0.0;
+                    cout << "  Max Score: " << max_score << "  Flap Rate: " << flap_rate << "  qValue[0]: " << forward[
+                        0] << " qValue[1]: " << forward[1] << endl;
+                }
+
+
+                while (SDL_PollEvent(&event)) {
+                    if (event.type == SDL_QUIT) {
+                        running = false;
+                    }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_s) {
+                        //speed toggle
+                        // -- removes FPS cap
+                        speed_toggle = !speed_toggle;
+                    }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_h) {
+                        //render toggle -- reduced gpu overhead, faster network training if off -- changed with multithreading. I cant tell a difference in training time with/without this, but Ill keep it just in case
+                        render_config = !render_config;
+                    }
+                }
+
+                Uint32 frameTime = SDL_GetTicks() - startTime; // Calculate time taken for frame
+
+                if (!speed_toggle) {
+                    // Cap FPS
+                    if (frameTime < frameDelay_ms) {
+                        SDL_Delay(frameDelay_ms - frameTime);
+                    }
+                }
+            }
+        }
+        break;
+        case 3: {
+            //yuhh
+            int max_score = 0;
+
+
+            //train model headed by default; option to enable/disable graphics -- RENDERING ONLY OCCURS FOR TRAINING THREAD; all multithreaded envs remain unrendered
+            cout << "Starting...\n";
+            vector<GameEnv> envs = vector<GameEnv>(0, 0); //create vector for game envs
+
+            cout << "Reserving memory...";
+            envs.reserve(threads_config - 1); //reserve memory space for each env
+            cout << "OK\n";
+
+            cout << "Creating Environments...";
+            for (int i = 0; i < 1; i++) {
+                //for loop to create environments
+                envs.emplace_back(GameEnv(i));
+            }
+            cout << "OK\n";
+
+            size_t train_steps = 0;
+            const size_t target_net_update_interval = 50000;
+
+            //Model Reqs init
+            cout << "Creating Network...";
+            Network network = Network(0);
+            cout << "OK\n";
+
+            cout << "Initializing Network...";
+            network = Network::load_model("models/Model_" + to_string(load_model_num) + ".txt");
+            //initilize network params
+            cout << "OK\n";
+
+            cout << "Creating/Initializing Target Network...";
+            Network target_network = network; //deep copy of network to start for target net
+            cout << "OK\n";
+
+
+            if (SDL_Init(SDL_INIT_VIDEO)) {
+                cout << "SDL_Init Error: " << SDL_GetError() << endl; //the now very not epic window failed to open
+            } else {
+                cout << "SDL_Init...OK\n";
+            }
+
+            if (!window) {
+                cout << "SDL_CreateWindow Error: " << SDL_GetError() << endl;
+                SDL_Quit();
+                return 1;
+            } else {
+                cout << "SDL_CreateWindow...OK\n";
+            }
+
+            const Uint32 worker_env_fps = 120;
+            const Uint32 worker_delay = 1000 / worker_env_fps;
+
+            vector<std::thread> worker_threads;
+            for (int i = 0; i < 1; i++) {
+                worker_threads.emplace_back([&, i]() {
+                    auto &env = envs[i];
+
+
+                    Uint32 last_step_time = SDL_GetTicks();
+
+                    while (running) {
+                        if (speed_toggle) {
+                            //env.update(has_clicked, policy, &network, &replay_buffer, (false));
+
+                            Uint32 now = SDL_GetTicks();
+                            if (now - last_step_time >= worker_delay / 2) {
+                                env.update(has_clicked, &network, false);
+                                last_step_time = now;
+                            } else {
+                                // Don't burn CPU; yield thread for a tiny bit
+                                // std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                            }
+                        } else {
+                            // SLOW MODE — rate-limited
+                            Uint32 now = SDL_GetTicks();
+                            if (now - last_step_time >= worker_delay) {
+                                env.update(has_clicked, &network, false);
+                                last_step_time = now;
+                            } else {
+                                // Don't burn CPU; yield thread for a tiny bit
+                                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                            }
+                        }
+
+
+                        if (env.check_collision(&env.bird, &env.walls)) {
+                            //reset functionss
+                            env.walls.clear();
+                            env.bird.x = 200;
+                            env.bird.y = window_height_config / 2;
+                            env.bird.y_vel = 0;
+                            env.last_wall_spawn_frames = env.wall_delay_frames;
+                            env.episodes++;
+                            env.bird.score = 0;
+                        }
+                    }
+                });
+            }
+
+            while (running) {
+                //main update loop
+                Uint32 startTime = SDL_GetTicks();
+                Uint32 frameDelay_ms = 1000 / target_fps_config;
+
+
+                render(renderer, &envs);
+                //render(renderer, &envs[0].bird, &envs[0].walls); single env render
+
+                for (GameEnv &env: envs) {
+                    if (env.max_score > max_score) {
+                        max_score = env.max_score;
+                    }
+                }
+
+
+                if (envs[0].iterations % 20 == 0 && envs[0].iterations > 0) {
+                    auto forward = network.forward(envs[0].get_game_state());
+                    double flap_rate = (envs[0].iterations > 0)
+                                           ? double(envs[0].flaps) / double(envs[0].iterations)
+                                           : 0.0;
+                    cout << "  Max Score: " << max_score << "  Flap Rate: " << flap_rate << "  qValue[0]: " << forward[
+                        0] << " qValue[1]: " << forward[1] << endl;
+                }
+
+
+                while (SDL_PollEvent(&event)) {
+                    if (event.type == SDL_QUIT) {
+                        running = false;
+                    }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_s) {
+                        //speed toggle
+                        // -- removes FPS cap
+                        speed_toggle = !speed_toggle;
+                    }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_h) {
+                        //render toggle -- reduced gpu overhead, faster network training if off -- changed with multithreading. I cant tell a difference in training time with/without this, but Ill keep it just in case
+                        render_config = !render_config;
+                    }
+                }
+
+                Uint32 frameTime = SDL_GetTicks() - startTime; // Calculate time taken for frame
+
+                if (!speed_toggle) {
+                    // Cap FPS
+                    if (frameTime < frameDelay_ms) {
+                        SDL_Delay(frameDelay_ms - frameTime);
+                    }
+                }
+            }
+        }
+        break;
+        case 4: {
+            //very epic multithreaded training
+            int max_score = 0;
+
+
+            //train model headed by default; option to enable/disable graphics -- RENDERING ONLY OCCURS FOR TRAINING THREAD; all multithreaded envs remain unrendered
+            cout << "Starting...\n";
+            vector<GameEnv> envs = vector<GameEnv>(0, 0); //create vector for game envs
+
+            cout << "Reserving memory...";
+            envs.reserve(threads_config - 1); //reserve memory space for each env
+            cout << "OK\n";
+
+            cout << "Creating Environments...";
+            for (int i = 0; i < threads_config - 1; i++) {
+                //for loop to create environments
+                envs.emplace_back(GameEnv(i));
+            }
+            cout << "OK\n";
+
+            cout << "Creating Replay Buffer...";
+            ReplayBuffer replay_buffer = ReplayBuffer(replay_buffer_size_config);
+            cout << "OK\n";
+
+            size_t train_steps = 0;
+            const size_t target_net_update_interval = 50000;
+
+            //Model Reqs init
+            cout << "Creating Network...";
+            Network network = Network(0);
+            cout << "OK\n";
+
+            cout << "Initializing Network...";
+            network = Network::load_model("models/Model_" + to_string(load_model_num) + ".txt");
+            //initilize network params
+            cout << "OK\n";
+
+            cout << "Creating/Initializing Target Network...";
+            Network target_network = network; //deep copy of network to start for target net
+            cout << "OK\n";
+
+            cout << "initializing Policy...";
+            auto policy = EpsilonGreedyPolicy(policy_decay_config, min_epsilon_config);
+            cout << "OK\n";
+
+
+            if (SDL_Init(SDL_INIT_VIDEO)) {
+                cout << "SDL_Init Error: " << SDL_GetError() << endl; //the now very not epic window failed to open
+            } else {
+                cout << "SDL_Init...OK\n";
+            }
+
+            if (!window) {
+                cout << "SDL_CreateWindow Error: " << SDL_GetError() << endl;
+                SDL_Quit();
+                return 1;
+            } else {
+                cout << "SDL_CreateWindow...OK\n";
+            }
+
+
+            const Uint32 worker_env_fps = 120;
+            const Uint32 worker_delay = 1000 / worker_env_fps;
+
+
+            vector<std::thread> worker_threads;
+            for (int i = 0; i < threads_config - 1; i++) {
+                worker_threads.emplace_back([&, i]() {
+                    auto &env = envs[i];
+
+
+                    Uint32 last_step_time = SDL_GetTicks();
+
+                    while (running) {
+                        if (speed_toggle) {
+                            //env.update(has_clicked, policy, &network, &replay_buffer, (false));
+
+                            Uint32 now = SDL_GetTicks();
+                            if (now - last_step_time >= worker_delay / 2) {
+                                env.update(has_clicked, policy, &network, &replay_buffer, false);
+                                last_step_time = now;
+                            } else {
+                                // Don't burn CPU; yield thread for a tiny bit
+                                // std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                            }
+                        } else {
+                            // SLOW MODE — rate-limited
+                            Uint32 now = SDL_GetTicks();
+                            if (now - last_step_time >= worker_delay) {
+                                env.update(has_clicked, policy, &network, &replay_buffer, false);
+                                last_step_time = now;
+                            } else {
+                                // Don't burn CPU; yield thread for a tiny bit
+                                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                            }
+                        }
+
+
+                        if (env.check_collision(&env.bird, &env.walls)) {
+                            //reset functionss
+                            env.walls.clear();
+                            env.bird.x = 200;
+                            env.bird.y = window_height_config / 2;
+                            env.bird.y_vel = 0;
+                            env.last_wall_spawn_frames = env.wall_delay_frames;
+                            env.episodes++;
+                            env.bird.score = 0;
+                        }
+                    }
+                });
+            }
+
+
+            while (running) {
+                //main update loop
+                Uint32 startTime = SDL_GetTicks();
+                Uint32 frameDelay_ms = 1000 / target_fps_config;
+
+
+                render(renderer, &envs);
+                //render(renderer, &envs[0].bird, &envs[0].walls); single env render
+
+                for (GameEnv &env: envs) {
+                    if (env.max_score > max_score) {
+                        max_score = env.max_score;
+                    }
+                }
+
+
+                if (envs[0].iterations % 20 == 0 && envs[0].iterations > 0) {
+                    auto forward = network.forward(envs[0].get_game_state());
+                    double flap_rate = (envs[0].iterations > 0)
+                                           ? double(envs[0].flaps) / double(envs[0].iterations)
+                                           : 0.0;
+                    cout << "Epsilon: " << policy.getEpsilon() << "  Max Score: " << max_score << "  Flap Rate: " <<
+                            flap_rate << "  Steps: " << envs[0].iterations << "  qValue[0]: " << forward[0] <<
+                            " qValue[1]: " << forward[1] << endl;
+                }
+
+
+                while (SDL_PollEvent(&event)) {
+                    if (event.type == SDL_QUIT) {
+                        running = false;
+                    }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_s) {
+                        //speed toggle
+                        // -- removes FPS cap
+                        speed_toggle = !speed_toggle;
+                    }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_h) {
+                        //render toggle -- reduced gpu overhead, faster network training if off -- changed with multithreading. I cant tell a difference in training time with/without this, but Ill keep it just in case
+                        render_config = !render_config;
+                    }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_m) {
+                        //save model
+                        //running = false; //temp for debug
+                        network.save_model(&network); //still need to make this lol
+                    }
+                    if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_p) {
+                        policy.epsilon = policy.epsilon == min_epsilon_config ? 0 : min_epsilon_config;
+                        tick_decay = !tick_decay;
+                    }
+                }
+
+                Uint32 frameTime = SDL_GetTicks() - startTime; // Calculate time taken for frame
+
+                if (!speed_toggle) {
+                    // Cap FPS
+                    if (frameTime < frameDelay_ms) {
+                        SDL_Delay(frameDelay_ms - frameTime);
+                    }
+                }
+
 
                 // Training phase (sample batch from replay buffer)
 
                 if (replay_buffer.size() > replay_buffer_sample_size_config) {
-                    std::uniform_int_distribution<size_t> idx_dist(0, replay_buffer.size() - 1);
+                    if (++train_steps % 16 == 0) {
+                        auto batch = replay_buffer.sample_prioritized(replay_buffer_sample_size_config, rng);
+                        if (batch.empty()) {
+                            // something's off, but just skip safely
+                        } else {
+                            for (const auto &t: batch) {
+                                // Double DQN target
+                                std::vector<float> q_next_online = network.forward(t.next_state);
+                                int a_star = int(std::distance(
+                                    q_next_online.begin(),
+                                    std::max_element(q_next_online.begin(), q_next_online.end())
+                                ));
 
-                    for (int n = 0; n < replay_buffer_sample_size_config; ++n) {
-                        const Transition &t = replay_buffer[idx_dist(rng)];
+                                std::vector<float> q_next_target = target_network.forward(t.next_state);
+                                float next_val = q_next_target[a_star];
 
-                        // Double DQN target
-                        std::vector<float> q_next_online = network.forward(t.next_state);
-                        int a_star = int(std::distance(
-                            q_next_online.begin(),
-                            std::max_element(q_next_online.begin(), q_next_online.end())
-                        ));
+                                float bootstrap = t.done ? 0.0f : gamma_config * next_val;
 
-                        std::vector<float> q_next_target = target_network.forward(t.next_state);
-                        float next_val = q_next_target[a_star];
+                                std::vector<float> q_cur = network.forward(t.state);
+                                std::vector<float> target = q_cur;
+                                target[t.action] = t.reward + bootstrap;
 
-                        float bootstrap = t.done ? 0.0f : gamma_config * next_val;
-
-                        std::vector<float> q_cur = network.forward(t.state);
-                        std::vector<float> target = q_cur;
-                        target[t.action] = static_cast<float>(t.reward) + bootstrap;
-
-
-                        {
-                            network.backward(target);
+                                network.backward(target);
+                                train_steps++;
+                            }
                         }
-                        train_steps++;
+
+                        if (train_steps % target_net_update_interval == 0) {
+                            target_network = network;
+                        }
+                        if (tick_decay) {
+                            policy.decay();
+                        }
                     }
-
-                    // Periodic hard update of target net
-                    if (train_steps % target_net_update_interval == 0) {
-                        target_network = network;
-                    }
-
-                    policy.decay();
-                }
-
-
-                //make sure replay buffer remains within buffer size limit
-                if ((int) replay_buffer.size() > replay_buffer_size_config) {
-                    //if buffer exceeds max size, delete oldest entry
-                    replay_buffer.erase(replay_buffer.begin());
-                }
-
-                //reset the bird if it has crashed
-                if (env.check_collision(&env.bird, &walls)) {
-                    //reset functionss
-                    walls.clear();
-                    env.bird.x = 200;
-                    env.bird.y = window_height_config / 2;
-                    env.bird.y_vel = 0;
-                    env.last_wall_spawn_frames = env.wall_delay_frames;
-                    env.episodes++;
-                    env.bird.score = 0;
                 }
             }
         }
-
         break;
-        case 2:
-            //train model, multithreaded
-
-            break;
-        case 3:
-            //load model
-            break;
-
-        default:
-            break;
+        default: ;
     }
 
 
     //ayo, clean it
+
+
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();

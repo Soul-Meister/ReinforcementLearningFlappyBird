@@ -5,7 +5,7 @@
 #ifndef FLAPPYBIRD_CONFIG_H
 #define FLAPPYBIRD_CONFIG_H
 
-
+#include <thread>
 #include <vector>
 
 
@@ -15,14 +15,19 @@ class Config {
 };
 
 extern int game_mode;//used to determine type of gameplay.
+extern int load_model_num;
 //0 for human player
 //1 for train model on these configurations - Single threaded
 //2 for train model on these configurations - Multi threaded
 //3 for loading a model form json, then running an env making inferences form that model
 
-extern int threads; //if gamemode 2 is selected, this chooses how many threads to run; LIMITED BY CPU CORE COUNT; one thread per core.
+
+
+extern int threads_config; //if gamemode 2 is selected, this chooses how many threads to run; LIMITED BY CPU CORE COUNT; one thread per core.
 //Runs threads-1 environments; 1 is ALWAYS allocated for training loop.
 //more threads == faster training
+extern int border_thickness_config;
+//the border thickness of the lines separating each env during multi env rendering
 
 
 extern int window_height_config;//if rendered, how large the height of the window will be
@@ -42,18 +47,20 @@ extern float bias_config; //starting bias; this is for giggles. Standard is for 
 //network config
 extern std::vector<int> network_config; //determines the size of the network, NOT COUNTING input layer.
 
-//Policy -- NOT ALL WILL BE USED< DEPENDING ON SELECTED POLICY
+//Policy -- NOT ALL WILL BE USED
 extern float min_epsilon_config; // Minimum value for exploration in Epsilon policy -- ensures that the model will always be trying enw things, by ensuring the model ALWAYS epxlores, by at least this amount
 extern float policy_decay_config; //how quickly the model shifts from exploring to exploiting -- larger values will yeild a 'finished model' sooner, but will shirnk its time to explore, so the model won't perform as well.
 
 //discount rate
 extern float gamma_config; //how much rewards are discounted; usually 0.95 - 0.99
 
-//Activation Function Config -- NOT ALL WILL BE USED, USAGE BASED ON SELECTED POLICY
+//Activation Function Config
 extern float alpha_config;//for Leaky ReLU; determines the value for negative activations in a linear manner -- prevent dead neurons
 
 //global variable for render
 extern bool render_config;
+
+
 
 
 

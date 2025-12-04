@@ -5,18 +5,22 @@
 #ifndef FLAPPYBIRD_NETWORK_H
 #define FLAPPYBIRD_NETWORK_H
 
+#include <mutex>
 #include <string>
 #include <vector>
 #include "../Layer/Layer.h"
 
 class Network {
 private:
-    vector<Layer> layers;
     vector<float> last_input;
+    mutable std::mutex mtx;
 public:
-    Network();
+    vector<Layer> layers;
 
-    void save_model();
+    Network(int mode);
+
+    void save_model(Network*);
+    static Network load_model(string);
 
     Network(const Network &other);
 
@@ -28,9 +32,7 @@ public:
     vector<float> forward(const vector<float> &input);
     void backward(const vector<float>& target);
     int get_layer_num();
-    void add_layer(vector<Neuron> layer);
-
-    void export_network(string filename);
+    static void add_layer(Layer* layer, Network* network);
 };
 
 

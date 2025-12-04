@@ -13,8 +13,8 @@ void Bird::update() {
     y_vel -= gravity;
     y += y_vel;
 
-    if (y_vel > 10) {
-        y_vel = 10;
+    if (y_vel > 5) {
+        y_vel = 5;
     }
 
 

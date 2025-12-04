@@ -16,6 +16,14 @@ Layer::Layer(const Layer& other) {
     }
 }
 
+Layer::Layer() {
+    neurons.clear();
+}
+
+void Layer::add_neuron(Neuron neuron) {
+    neurons.push_back(neuron);
+}
+
 Layer& Layer::operator=(const Layer& other) {
     if (this != &other) {
         neurons = other.neurons;

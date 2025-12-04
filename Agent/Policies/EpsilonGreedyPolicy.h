@@ -13,8 +13,8 @@ public:
     EpsilonGreedyPolicy(float, float);
     float getEpsilon();
     void decay();
-private:
     float epsilon;
+private:
     float decay_val;
     float min_val;
 
